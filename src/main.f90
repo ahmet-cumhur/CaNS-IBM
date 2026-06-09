@@ -83,6 +83,11 @@ program cans
 #endif
   use mod_types
   use omp_lib
+!*****IBM******!
+#if defined(_USE_IBM)
+  use             ::  mod_ibm
+#endif
+!**************!
   implicit none
   integer , dimension(3) :: lo,hi,n,n_x_fft,n_y_fft,lo_z,hi_z,n_z
   real(rp), target, allocatable, dimension(:,:,:) :: u,v,w,p,pp
@@ -145,6 +150,11 @@ program cans
   character(len=10), allocatable, dimension(:) :: c_io_vars
   integer :: k,kk
   logical :: is_done,kill
+!********IBM*******!
+#if defined(_USE_IBM)
+type(ibm_type)  ::  ibm
+#endif
+!******************!
   !
   call MPI_INIT(ierr)
   call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ierr)
@@ -419,6 +429,15 @@ program cans
   if(myid == 0) print*, 'dt_cfl = ', dt_cfl, 'dt = ', dt
   dti = 1./dt
   kill = .false.
+!**********IBM-PART***********!
+#if defined(_USE_IBM)
+  call init_ibm(ibm,l,n)
+  call set_ibm_staircase(lo,ibm,ibm%mask_u,1,0,0,n,l,dl)
+  call set_ibm_staircase(lo,ibm,ibm%mask_v,0,1,0,n,l,dl)
+  call set_ibm_staircase(lo,ibm,ibm%mask_w,0,0,1,n,l,dl)
+#endif
+
+!*****************************
   !
   ! main loop
   !
@@ -464,6 +483,11 @@ program cans
                              lambdaxyw,aw,bw,cw,rhsbw%x,rhsbw%y,rhsbw%z,is_bound,cbcvel(:,:,3),['c','c','f'],w)
       end if
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
+#if defined(_USE_IBM)
+      call apply_ibm_staircase(ibm,u,ibm%mask_u,dtrk)
+      call apply_ibm_staircase(ibm,v,ibm%mask_v,dtrk)
+      call apply_ibm_staircase(ibm,w,ibm%mask_w,dtrk)
+#endif 
       call fillps(n,dli,dzfi,dtrki,u,v,w,pp)
       call updt_rhs_b(['c','c','c'],cbcpre,n,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)
       call solver(n,ng,arrplanp,normfftp,lambdaxyp,ap,bp,cp,cbcpre,['c','c','c'],pp,is_ptdma_update_p,ap_d,cp_d)
@@ -475,6 +499,7 @@ program cans
     end do
     dpdl(:)     = -dpdl(:)*dti
     fs(1:nscal) = fs(1:nscal)*dti
+
     !
     ! check simulation stopping criteria
     !

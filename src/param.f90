@@ -108,7 +108,14 @@ logical, protected :: is_impdiff = .false., is_impdiff_1d = .false., &
 character(len=16), protected :: io_backend = 'mpiio'
 character(len=6) , protected :: io_ext = '.bin'
 logical          , protected :: is_use_compression = .false.
-
+! IBM
+logical,protected     :: is_ibm=.false.
+logical, protected    :: ibm_direction(0:1,3)=.false.
+real(rp), protected   :: l_0(0:1,3)=0._rp
+integer, protected    :: n_wave(0:1,3)=0._rp
+real(rp), protected   :: amp_l(0:1,3)=0._rp
+real(rp), protected   :: phase_l(0:1,3)=0._rp
+!
 contains
   subroutine read_input(myid)
     use, intrinsic :: iso_fortran_env, only: iostat_end
@@ -162,6 +169,14 @@ contains
                             is_debug,is_debug_poisson, &
                             is_timing, &
                             is_mask_divergence_check
+    namelist /ibm/ &
+                            is_ibm,           &
+                            ibm_direction,    &
+                            l_0,              &
+                            n_wave,           &
+                            amp_l,            &
+                            phase_l                       
+
     !
     ! defaults
     !
@@ -388,6 +403,16 @@ contains
       if(is_use_compression .and. trim(io_backend) == 'mpiio') then
         if(myid == 0) print*, 'Warning: compression is ignored for `io_backend = mpiio`.'
       end if
+    rewind(iunit)
+    read(iunit,nml=ibm,iostat=ierr,iomsg=c_iomsg)
+      if(ierr /= 0 .and. ierr /= iostat_end) then
+        if(myid == 0) print*, 'ERROR: reading `ibm` namelist: ', trim(c_iomsg)
+        if(myid == 0) print*, 'Aborting...'
+        call MPI_FINALIZE(ierr)
+        close(iunit)
+        error stop
+      end if
+
     close(iunit)
   end subroutine read_input
 end module mod_param

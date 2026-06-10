@@ -64,8 +64,14 @@ program cans
                                  is_debug,is_debug_poisson, &
                                  is_timing, &
                                  is_impdiff,is_impdiff_1d, &
-                                 is_poisson_pcr_tdma, &
-                                 is_mask_divergence_check
+                                 is_poisson_pcr_tdma,      &
+                                 is_mask_divergence_check, &
+                                 is_ibm,           &
+                                 ibm_direction,    &
+                                 l_0,              &
+                                 n_wave,           &
+                                 amp_l,            &
+                                 phase_l   
   use mod_sanity         , only: test_sanity_input,test_sanity_solver
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_solve_helmholtz, only: solve_helmholtz,rhs_bound
@@ -84,9 +90,7 @@ program cans
   use mod_types
   use omp_lib
 !*****IBM******!
-#if defined(_USE_IBM)
   use             ::  mod_ibm
-#endif
 !**************!
   implicit none
   integer , dimension(3) :: lo,hi,n,n_x_fft,n_y_fft,lo_z,hi_z,n_z
@@ -151,9 +155,9 @@ program cans
   integer :: k,kk
   logical :: is_done,kill
 !********IBM*******!
-#if defined(_USE_IBM)
-type(ibm_type)  ::  ibm
-#endif
+  logical,allocatable :: mask_u(:,:,:)
+  logical,allocatable :: mask_v(:,:,:)
+  logical,allocatable :: mask_w(:,:,:)
 !******************!
   !
   call MPI_INIT(ierr)
@@ -430,13 +434,27 @@ type(ibm_type)  ::  ibm
   dti = 1./dt
   kill = .false.
 !**********IBM-PART***********!
-#if defined(_USE_IBM)
-  call init_ibm(ibm,l,n)
-  call set_ibm_staircase(lo,ibm,ibm%mask_u,1,0,0,n,l,dl)
-  call set_ibm_staircase(lo,ibm,ibm%mask_v,0,1,0,n,l,dl)
-  call set_ibm_staircase(lo,ibm,ibm%mask_w,0,0,1,n,l,dl)
-#endif
-
+  if(is_ibm)then
+    ! we initalize the ibm coef. here
+    allocate(mask_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(mask_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(mask_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    ! isInbody ---> false 
+    ! so they start w/ all fluid
+    print*, "***IBM coefficients are initializing***"
+    mask_u = .false.
+    mask_v = .false.
+    mask_w = .false.
+  endif
+  if(is_ibm)then
+    ! we fill the ibm masks here
+    call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
+    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    call set_ibm_staircase(lo,mask_v,0,1,0,n,l,dl,&
+    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
+    ibm_direction,amp_l,n_wave,l_0,phase_l)
+  endif
 !*****************************
   !
   ! main loop
@@ -483,11 +501,11 @@ type(ibm_type)  ::  ibm
                              lambdaxyw,aw,bw,cw,rhsbw%x,rhsbw%y,rhsbw%z,is_bound,cbcvel(:,:,3),['c','c','f'],w)
       end if
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
-#if defined(_USE_IBM)
-      call apply_ibm_staircase(ibm,u,ibm%mask_u,dtrk)
-      call apply_ibm_staircase(ibm,v,ibm%mask_v,dtrk)
-      call apply_ibm_staircase(ibm,w,ibm%mask_w,dtrk)
-#endif 
+      if(is_ibm)then
+        call apply_ibm_staircase(u,mask_u,dtrk)
+        call apply_ibm_staircase(v,mask_v,dtrk)
+        call apply_ibm_staircase(w,mask_w,dtrk)
+      endif
       call fillps(n,dli,dzfi,dtrki,u,v,w,pp)
       call updt_rhs_b(['c','c','c'],cbcpre,n,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)
       call solver(n,ng,arrplanp,normfftp,lambdaxyp,ap,bp,cp,cbcpre,['c','c','c'],pp,is_ptdma_update_p,ap_d,cp_d)

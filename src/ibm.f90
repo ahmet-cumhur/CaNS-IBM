@@ -2,74 +2,74 @@ module mod_ibm
     use :: mod_types 
     use :: mod_param
     implicit none
-    type :: ibm_type
-        real(rp) ::  phase_x,phase_y
-        real(rp) ::  amp_x,amp_y  
-        real(rp) :: z0     
-        real(rp)::solid = 1.0d30   
-        real(rp),allocatable:: mask_u(:,:,:),mask_v(:,:,:),&
-                                mask_w(:,:,:) 
-        integer  :: n_wave_x, n_wave_y
-    end type
     contains 
     ! we initalize the ibm coef. here
     ! at the main.f90
-    subroutine init_ibm(ibm,l,n)
-        implicit none
-        type(ibm_type),intent(inout)                :: ibm
-        real(rp), intent(in   ), dimension(3)   :: l
-        integer , intent(in   ), dimension(3)       :: n
-        ibm%amp_x = 0.15_rp*l(3)
-        ibm%amp_y = 0.1_rp*l(3)
-        ibm%z0 = 0.1_rp*l(3)
-        ibm%phase_x = 0._rp
-        ibm%phase_y = 0._rp
-        ibm%n_wave_x = 2
-        ibm%n_wave_y = 1
-        allocate(ibm%mask_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-        allocate(ibm%mask_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-        allocate(ibm%mask_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-        ! isInbody ---> false 
-        ! so they start w/ all fluid
-        print*, "***IBM coefficients are initializing***"
-        ibm%mask_u = 0._rp
-        ibm%mask_v = 0._rp
-        ibm%mask_w = 0._rp
-    end subroutine init_ibm
     ! check if the real location(x,y,z) is in the given body shape 
-    logical function isInbody(ibm,x,y,z,n,l)
+    logical function isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l)
         implicit none
-        type(ibm_type),intent(inout) :: ibm
-        integer , intent(in   ), dimension(3)   :: n
-        real(rp), intent(in   ), dimension(3)   :: l
-        real(rp),intent(in)                     :: x,y,z 
-        real(rp),parameter                      :: pi = 3.141592653589793_rp
-        real(rp)                                :: z_body
-        z_body = ibm%z0+ibm%amp_x * 0.5d0 * &
-                 (1.0d0 + sin(2.0d0*pi*real(ibm%n_wave_x,rp)*x/l(1) + ibm%phase_x))  + &
-                 ibm%amp_y * 0.5d0 * &
-                (1.0d0 + sin(2.0d0*pi*real(ibm%n_wave_y,rp)*y/l(2) + ibm%phase_y))
-        isInBody = .false.
-        if(z<z_body)then
-            isInBody = .true.
-        endif 
+        logical , intent(in), dimension(0:1,3)   :: ibm_direction
+        real(rp), intent(in), dimension(0:1,3)   :: amp_l
+        integer , intent(in), dimension(0:1,3)   :: n_wave
+        real(rp), intent(in), dimension(0:1,3)   :: l_0
+        real(rp), intent(in), dimension(0:1,3)   :: phase_l
+        integer , intent(in), dimension(3)       :: n
+        real(rp), intent(in), dimension(3)       :: l
+        real(rp),intent(in)                      :: x,y,z 
+        real(rp),parameter                       :: pi = 3.141592653589793_rp
+        real(rp)                                 :: height(0:1,3)
+        integer                                  :: side,t
+        real(rp)                                 :: xyz(3)
+        integer                                  :: i,ii
+        xyz = [x,y,z]
+        do side = 0,1
+            do t = 1,3
+                i=modulo(t,3)+1
+                ii=modulo(t+1,3)+1
+                if(ibm_direction(side,t))then
+                    height(side,t)=amp_l(side,i)*0.5_rp*(1._rp+sin(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
+                    amp_l(side,ii)*0.5_rp*(1._rp+sin(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
+                else
+                    height(side,t)=0._rp
+                endif
+            end do 
+        end do 
+        isInBody=.false.
+        do t = 1,3
+            if(ibm_direction(0,t))then
+                height(0,t)=l_0(0,t)+height(0,t)
+                if(xyz(t)<=height(0,t))then
+                    isInBody=.true.
+                endif
+            endif
+            if(ibm_direction(1,t))then
+                height(1,t)=l_0(1,t)-height(1,t)
+                if(xyz(t)>=height(1,t))then
+                    isInBody=.true.
+                endif
+            endif   
+        end do 
     end function isInbody
     ! 1st order IBM 
     ! we change the diL depending the velocity mask we are handling 
     ! e.g. we need to apply 1,0,0 for mask_u and we need to apply 0,1,0 for mask_v 
     ! 0,0,1 for mask_w
-    subroutine set_ibm_staircase(lo,ibm,mask_id,dix,diy,diz,n,l,dl)
+    subroutine set_ibm_staircase(lo,mask_id,dix,diy,diz,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
         implicit none
-        type(ibm_type),intent(inout)                :: ibm
         real(rp), intent(in   ), dimension(3)       :: l
         real(rp), intent(in   ), dimension(3)       :: dl
         integer , intent(in   ), dimension(3)       :: n
         integer , intent(in   ), dimension(3)       :: lo
-        real(rp),intent(inout),dimension(0:,0:,0:)   :: mask_id
+        logical,intent(inout),dimension(0:,0:,0:)   :: mask_id
         integer,intent(in)                          :: dix,diy,diz 
         integer                                     :: i,j,k
         integer                                     :: ii,jj,kk
         real(rp)                                    :: x,y,z
+        logical , intent(in), dimension(0:1,3)      :: ibm_direction
+        real(rp), intent(in), dimension(0:1,3)      :: amp_l
+        integer , intent(in), dimension(0:1,3)      :: n_wave
+        real(rp), intent(in), dimension(0:1,3)      :: l_0
+        real(rp), intent(in), dimension(0:1,3)      :: phase_l
         print*, "***IBM coefficients are deploying***"
         do k = lbound(mask_id,3),ubound(mask_id,3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
@@ -81,26 +81,24 @@ module mod_ibm
                     x = (real(ii,rp) - real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) - real(diy,rp)*0.5d0)*dl(2)
                     z = (real(kk,rp) - real(diz,rp)*0.5d0)*dl(3)
-                    if(isInbody(ibm,x,y,z,n,l).eqv..true.)then
-                        mask_id(i,j,k) = ibm%solid
+                    if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
+                        mask_id(i,j,k) = .true.
                     endif 
                 end do 
             end do 
         end do
     end subroutine set_ibm_staircase
-    subroutine apply_ibm_staircase(ibm,field,mask_id,dt)
+    subroutine apply_ibm_staircase(field,mask_id,dt)
         implicit none
-        type(ibm_type)                              :: ibm
         real(rp),intent(inout),dimension(0:,0:,0:)  :: field
-        real(rp),intent(in),dimension(0:,0:,0:)     :: mask_id
+        logical,intent(in),dimension(0:,0:,0:)      :: mask_id
         real(rp),intent(in)                         :: dt
         integer :: i,j,k
         do k = lbound(field,3),ubound(field,3)
             do j = lbound(field,2),ubound(field,2)
                 do i = lbound(field,1),ubound(field,1)
-                    if (mask_id(i,j,k)>=.5_rp*ibm%solid)then
+                    if (mask_id(i,j,k).eqv..true.)then
                         field(i,j,k) = 0._rp 
-                        !field(i,j,k)/(1._rp+dt*mask_id(i,j,k))
                     endif
                 end do 
             end do 

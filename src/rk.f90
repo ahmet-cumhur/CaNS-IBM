@@ -575,4 +575,36 @@ module mod_rk
       end if
     end if
   end subroutine cmpt_bulk_forcing_alternative
+
+!********//IBM\\*********!
+  subroutine calc_a_b(lo,laplacian_id,A_id,B_id,dt_loop,visc,dl)
+    implicit none
+    integer , intent(in   ), dimension(3)       :: lo
+    real(rp),intent(inout),dimension(0:,0:,0:)  :: laplacian_id
+    real(rp),intent(inout),dimension(0:,0:,0:)  :: A_id
+    real(rp),intent(inout),dimension(0:,0:,0:)  :: B_id
+    real(rp),intent(in)                         :: dt_loop,visc
+    real(rp), intent(in),dimension(3)           :: dl
+    real(rp)                                    :: ksi_l,e_l,dt_visc,eps
+    integer                                     :: i,j,k,ii,jj,kk
+    dt_visc = dt_loop*visc
+    eps=1e-10
+    do k=lbound(laplacian_id,3),ubound(laplacian_id,3)
+      do j=lbound(laplacian_id,2),ubound(laplacian_id,2)
+        do i=lbound(laplacian_id,1),ubound(laplacian_id,1)
+          ii = lo(1)+i-1;jj = lo(2)+j-1;kk = lo(3)+k-1;
+          ksi_l=laplacian_id(i,j,k)*dt_visc
+          e_l=exp(ksi_l)-1._rp
+          if(e_l>eps)then
+            B_id(i,j,k)=ksi_l/e_l
+          else
+            B_id(i,j,k)=1._rp/(1._rp+ksi_l/2._rp+&
+                              ksi_l**2/6._rp+ksi_l**3/24)
+          endif
+          A_id(i,j,k)=ksi_l+B_id(i,j,k)
+        end do
+      end do
+    end do
+  end subroutine calc_a_b
+!************************!
 end module mod_rk

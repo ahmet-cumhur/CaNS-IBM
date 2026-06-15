@@ -43,7 +43,7 @@ program cans
   use mod_initsolver     , only: initsolver
   use mod_load           , only: load_one
   use mod_mom            , only: bulk_forcing
-  use mod_rk             , only: rk,rk_scal
+  use mod_rk             , only: rk,rk_scal,calc_a_b
   use mod_output         , only: out0d,gen_alias,out1d,out1d_chan,out2d,out3d,write_log_output,write_visu_2d,write_visu_3d
   use mod_param          , only: ng,l,dl,dli, &
                                  gtype,gr, &
@@ -155,12 +155,19 @@ program cans
   integer :: k,kk
   logical :: is_done,kill
 !********IBM*******!
-  logical,allocatable :: mask_u(:,:,:)
-  logical,allocatable :: mask_v(:,:,:)
-  logical,allocatable :: mask_w(:,:,:)
-  real(rp),allocatable:: lap_u(:,:,:)
-  real(rp),allocatable:: lap_v(:,:,:)
-  real(rp),allocatable:: lap_w(:,:,:)
+  logical,allocatable   :: mask_u(:,:,:)
+  logical,allocatable   :: mask_v(:,:,:)
+  logical,allocatable   :: mask_w(:,:,:)
+  real(rp),allocatable  :: lap_u(:,:,:)
+  real(rp),allocatable  :: lap_v(:,:,:)
+  real(rp),allocatable  :: lap_w(:,:,:)
+
+  real(rp),allocatable  :: A_u(:,:,:)
+  real(rp),allocatable  :: A_v(:,:,:)
+  real(rp),allocatable  :: A_w(:,:,:)
+  real(rp),allocatable  :: B_u(:,:,:)
+  real(rp),allocatable  :: B_v(:,:,:)
+  real(rp),allocatable  :: B_w(:,:,:)
 !******************!
   !
   call MPI_INIT(ierr)
@@ -453,9 +460,21 @@ program cans
     allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(A_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(A_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(B_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(B_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(B_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     lap_u=0._rp
     lap_v=0._rp
     lap_w=0._rp
+    A_u=1._rp
+    A_v=1._rp
+    A_w=1._rp
+    B_u=1._rp
+    B_v=1._rp
+    B_w=1._rp
   endif
   if(is_ibm.and..not.ibm_2nd)then
     ! we fill the ibm masks here
@@ -491,6 +510,13 @@ program cans
     tauxo(:,:) = 0.; tauyo(:,:) = 0.; tauzo(:,:) = 0.
     dpdl(:)     = 0.
     fs(1:nscal) = 0.
+    !****//IBM-2nd\\****!
+    if(ibm_2nd)then
+      call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
+      call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
+      call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
+    endif
+    !*******************!
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       dtrki = dtrk**(-1)
@@ -507,7 +533,8 @@ program cans
         call boundp(s%cbc,n,s%bc,nb,is_bound,dl,dzc,s%val)
       end do
       call rk(rkcoeff(:,irk),n,dli,dzci,dzfi,grid_vol_ratio_c,grid_vol_ratio_f,dt,visc,p, &
-              is_forced,velf,bforce,gacc,beta,scalars,dudtrko,dvdtrko,dwdtrko,u,v,w,f)
+              is_forced,velf,bforce,gacc,beta,scalars,dudtrko,dvdtrko,dwdtrko,u,v,w,f,&
+              A_u,A_v,A_w,B_u,B_v,B_w)
       call bulk_forcing(n,is_forced,f,u,v,w)
       dpdl(:) = dpdl(:) + f(:)
       if(is_impdiff) then

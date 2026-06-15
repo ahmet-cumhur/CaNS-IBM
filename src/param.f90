@@ -110,6 +110,7 @@ character(len=6) , protected :: io_ext = '.bin'
 logical          , protected :: is_use_compression = .false.
 ! IBM
 logical,protected     :: is_ibm=.false.
+logical,protected     :: ibm_2nd=.false.
 logical, protected    :: ibm_direction(0:1,3)=.false.
 real(rp), protected   :: l_0(0:1,3)=0._rp
 integer, protected    :: n_wave(0:1,3)=0._rp
@@ -171,6 +172,7 @@ contains
                             is_mask_divergence_check
     namelist /ibm/ &
                             is_ibm,           &
+                            ibm_2nd,           &
                             ibm_direction,    &
                             l_0,              &
                             n_wave,           &

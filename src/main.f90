@@ -158,6 +158,9 @@ program cans
   logical,allocatable :: mask_u(:,:,:)
   logical,allocatable :: mask_v(:,:,:)
   logical,allocatable :: mask_w(:,:,:)
+  real(rp),allocatable:: lap_u(:,:,:)
+  real(rp),allocatable:: lap_v(:,:,:)
+  real(rp),allocatable:: lap_w(:,:,:)
 !******************!
   !
   call MPI_INIT(ierr)
@@ -446,7 +449,15 @@ program cans
     mask_v = .false.
     mask_w = .false.
   endif
-  if(is_ibm)then
+  if(ibm_2nd)then
+    allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(lap_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    lap_u=0._rp
+    lap_v=0._rp
+    lap_w=0._rp
+  endif
+  if(is_ibm.and..not.ibm_2nd)then
     ! we fill the ibm masks here
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l)
@@ -454,6 +465,14 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l)
+  elseif(is_ibm.and.ibm_2nd)then
+    print*, "***2nd Order IBM coefficients are deploying***"
+    call set_ibm_2nd(lo,lap_u,mask_u,1,0,0&
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+    call set_ibm_2nd(lo,lap_v,mask_v,0,1,0&
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+    call set_ibm_2nd(lo,lap_w,mask_w,0,0,1&
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
   endif
 !*****************************
   !

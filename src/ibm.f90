@@ -92,7 +92,7 @@ module mod_ibm
     subroutine set_ibm_2nd(lo,mask_id,laplacian_id,dix,diy,diz&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
         implicit none
-        logical,intent(in)                          :: mask_id(0:,0:,0:)
+        logical,intent(inout)                       :: mask_id(0:,0:,0:)
         real(rp), intent(in   ), dimension(3)       :: l
         real(rp), intent(in   ), dimension(3)       :: dl
         integer , intent(in   ), dimension(3)       :: n
@@ -119,6 +119,9 @@ module mod_ibm
                     x = (real(ii,rp) - real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) - real(diy,rp)*0.5d0)*dl(2)
                     z = (real(kk,rp) - real(diz,rp)*0.5d0)*dl(3)
+                    if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
+                        mask_id(i,j,k) = .true.
+                    endif 
                     xp=x+dl(1);xm=x-dl(1);yp=y+dl(2);ym=y-dl(2);zp=z+dl(3);zm=z-dl(3)
                     do n_dir=1,6
                         select case(n_dir)

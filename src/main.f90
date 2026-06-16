@@ -478,7 +478,7 @@ program cans
     B_v=1._rp
     B_w=1._rp
   endif
-  if(is_ibm.and..not.ibm_2nd)then
+  if(is_ibm)then
     ! we fill the ibm masks here
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l)
@@ -512,16 +512,16 @@ program cans
     tauxo(:,:) = 0.; tauyo(:,:) = 0.; tauzo(:,:) = 0.
     dpdl(:)     = 0.
     fs(1:nscal) = 0.
-    !****//IBM-2nd\\****!
-    if(ibm_2nd)then
-      call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
-      call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
-      call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
-    endif
-    !*******************!
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       dtrki = dtrk**(-1)
+      !****//IBM-2nd\\****!
+      if(ibm_2nd)then
+        call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
+        call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
+        call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
+      endif
+      !*******************!
       do iscal=1,nscal
         s => scalars(iscal)
         call rk_scal(rkcoeff(:,irk),n,dli,l,dzci,dzfi,grid_vol_ratio_f,s%alpha,dt,is_bound,u,v,w, &

@@ -83,7 +83,7 @@ program cans
   use mod_common_cudecomp, only: istream_acc_queue_1,ap_z_ptdma
 #endif
   use mod_updatep        , only: updatep
-  use mod_utils          , only: bulk_mean
+  use mod_utils          , only: bulk_mean,calc_mean_flow
 #if defined(_OPENACC)
   use mod_utils          , only: device_memory_footprint
 #endif
@@ -168,6 +168,8 @@ program cans
   real(rp),allocatable  :: B_u(:,:,:)
   real(rp),allocatable  :: B_v(:,:,:)
   real(rp),allocatable  :: B_w(:,:,:)
+
+  real(rp)              :: mean_u,mean_v,mean_w
 !******************!
   !
   call MPI_INIT(ierr)
@@ -486,11 +488,11 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l)
   elseif(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
-    call set_ibm_2nd(lo,lap_u,mask_u,1,0,0&
+    call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
-    call set_ibm_2nd(lo,lap_v,mask_v,0,1,0&
+    call set_ibm_2nd(lo,mask_v,lap_v,0,1,0&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
-    call set_ibm_2nd(lo,lap_w,mask_w,0,0,1&
+    call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
   endif
 !*****************************
@@ -729,6 +731,16 @@ program cans
       if(myid == 0) print*, dt12av/(1.*product(dims)),dt12min,dt12max
     end if
   end do
+  !***//calc-mean-flow\\***!
+  if(do_richardson)then
+    call calc_mean_flow(grid_vol_ratio_f,mask_u,u,mean_u,n)
+    call calc_mean_flow(grid_vol_ratio_f,mask_v,v,mean_v,n)
+    call calc_mean_flow(grid_vol_ratio_c,mask_w,w,mean_w,n)
+    if(myid==0)then
+      print*,"mean flow for each dir:",mean_u,mean_v,mean_w
+    endif
+  endif
+  !************************!
   !
   ! clear ffts
   !

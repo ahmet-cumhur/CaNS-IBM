@@ -89,15 +89,15 @@ module mod_ibm
         end do
     end subroutine set_ibm_staircase
     !2nd order scheme--laplacian settings
-    subroutine set_ibm_2nd(lo,laplacian_id,mask_id,dix,diy,diz&
+    subroutine set_ibm_2nd(lo,mask_id,laplacian_id,dix,diy,diz&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
         implicit none
+        logical,intent(in)                          :: mask_id(0:,0:,0:)
         real(rp), intent(in   ), dimension(3)       :: l
         real(rp), intent(in   ), dimension(3)       :: dl
         integer , intent(in   ), dimension(3)       :: n
         integer , intent(in   ), dimension(3)       :: lo
         real(rp),intent(inout),dimension(0:,0:,0:)  :: laplacian_id
-        logical,intent(in),dimension(0:,0:,0:)      :: mask_id
         integer,intent(in)                          :: dix,diy,diz 
         integer                                     :: i,j,k
         integer                                     :: ii,jj,kk
@@ -169,7 +169,6 @@ module mod_ibm
                 end do 
             end do 
         end do
-        print *, "min/max/count = ", minval(laplacian_id), maxval(laplacian_id), count(laplacian_id > 0._rp)
     end subroutine set_ibm_2nd
 
     subroutine calc_lambda(x,y,z,l_n,case_num,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl)

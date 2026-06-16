@@ -67,11 +67,13 @@ program cans
                                  is_poisson_pcr_tdma,      &
                                  is_mask_divergence_check, &
                                  is_ibm,           &
+                                 ibm_2nd,          &
+                                 do_richardson,    &
                                  ibm_direction,    &
                                  l_0,              &
                                  n_wave,           &
                                  amp_l,            &
-                                 phase_l   
+                                 phase_l                 
   use mod_sanity         , only: test_sanity_input,test_sanity_solver
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_solve_helmholtz, only: solve_helmholtz,rhs_bound
@@ -486,7 +488,8 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l)
-  elseif(is_ibm.and.ibm_2nd)then
+  endif
+  if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
     call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
@@ -494,6 +497,15 @@ program cans
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+  endif
+  if(ibm_2nd)then
+  print*, "max lap_u local = ", maxval(abs(lap_u))
+  print*, "max lap_v local = ", maxval(abs(lap_v))
+  print*, "max lap_w local = ", maxval(abs(lap_w))
+  endif
+  if(ibm_2nd .and. .not.is_ibm)then
+  if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"
+  error stop
   endif
 !*****************************
   !

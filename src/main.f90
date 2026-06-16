@@ -527,6 +527,13 @@ program cans
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       dtrki = dtrk**(-1)
+      !****//IBM\\****!
+      if(is_ibm)then
+        call apply_ibm_staircase(u,mask_u,dtrk)
+        call apply_ibm_staircase(v,mask_v,dtrk)
+        call apply_ibm_staircase(w,mask_w,dtrk)
+      endif
+      !*******************!
       !****//IBM-2nd\\****!
       if(ibm_2nd)then
         call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
@@ -561,11 +568,13 @@ program cans
                              lambdaxyw,aw,bw,cw,rhsbw%x,rhsbw%y,rhsbw%z,is_bound,cbcvel(:,:,3),['c','c','f'],w)
       end if
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
+      !****//IBM\\****!
       if(is_ibm)then
         call apply_ibm_staircase(u,mask_u,dtrk)
         call apply_ibm_staircase(v,mask_v,dtrk)
         call apply_ibm_staircase(w,mask_w,dtrk)
       endif
+      !*******************!
       call fillps(n,dli,dzfi,dtrki,u,v,w,pp)
       call updt_rhs_b(['c','c','c'],cbcpre,n,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)
       call solver(n,ng,arrplanp,normfftp,lambdaxyp,ap,bp,cp,cbcpre,['c','c','c'],pp,is_ptdma_update_p,ap_d,cp_d)

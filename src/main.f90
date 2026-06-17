@@ -85,7 +85,8 @@ program cans
   use mod_common_cudecomp, only: istream_acc_queue_1,ap_z_ptdma
 #endif
   use mod_updatep        , only: updatep
-  use mod_utils          , only: bulk_mean,calc_mean_flow
+  use mod_utils          , only: bulk_mean,calc_mean_flow,&
+                                 calc_mean_flow_easy
 #if defined(_OPENACC)
   use mod_utils          , only: device_memory_footprint
 #endif
@@ -528,11 +529,11 @@ program cans
       dtrk = sum(rkcoeff(:,irk))*dt
       dtrki = dtrk**(-1)
       !****//IBM\\****!
-      if(is_ibm)then
-        call apply_ibm_staircase(u,mask_u,dtrk)
-        call apply_ibm_staircase(v,mask_v,dtrk)
-        call apply_ibm_staircase(w,mask_w,dtrk)
-      endif
+      !if(is_ibm)then
+      !  call apply_ibm_staircase(u,mask_u,dtrk)
+      !  call apply_ibm_staircase(v,mask_v,dtrk)
+      !  call apply_ibm_staircase(w,mask_w,dtrk)
+      !endif
       !*******************!
       !****//IBM-2nd\\****!
       if(ibm_2nd)then
@@ -754,9 +755,9 @@ program cans
   end do
   !***//calc-mean-flow\\***!
   if(do_richardson)then
-    call calc_mean_flow(grid_vol_ratio_f,mask_u,u,mean_u,n)
-    call calc_mean_flow(grid_vol_ratio_f,mask_v,v,mean_v,n)
-    call calc_mean_flow(grid_vol_ratio_c,mask_w,w,mean_w,n)
+    call calc_mean_flow_easy(u,mean_u,n,dl,1)
+    call calc_mean_flow_easy(v,mean_v,n,dl,2)
+    call calc_mean_flow_easy(w,mean_w,n,dl,3)
     if(myid==0)then
       print*,"mean flow for each dir:",mean_u,mean_v,mean_w
     endif

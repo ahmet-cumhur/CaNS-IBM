@@ -193,11 +193,11 @@ module mod_ibm
         lambda=0._rp
         select case(case_num)
             case(1)
-                eps = 1e-10*dl(1)
+                eps = 1.e-10_rp*dl(1)
             case(2)
-                eps = 1e-10*dl(2)
+                eps = 1.e-10_rp*dl(2)
             case(3)
-                eps = 1e-10*dl(3)
+                eps = 1.e-10_rp*dl(3)
         end select
         select case(case_num)
             case(1)

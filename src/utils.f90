@@ -7,7 +7,7 @@
 module mod_utils
   implicit none
   private
-  public bulk_mean,f_sizeof,swap,calc_mean_flow
+  public bulk_mean,f_sizeof,swap,calc_mean_flow,calc_mean_flow_easy
 #if defined(_OPENACC)
   public device_memory_footprint
 #endif
@@ -81,6 +81,48 @@ contains
     ! the solids cells to therefore we find the fluid cells too. 
     mean=mean/vol
   end subroutine calc_mean_flow
+  subroutine calc_mean_flow_easy(field_id,q,n,dl,dir)
+    use mpi
+    use mod_types
+    implicit none
+    integer , intent(in)                      :: dir
+    real(rp), intent(in), dimension(3)        :: dl
+    integer , intent(in), dimension(3)        :: n
+    real(rp), intent(in), dimension(0:,0:,0:) :: field_id
+    real(rp), intent(out)                     :: q
+    integer                                   :: i,j,k
+    real(rp)                                  :: aface
+    integer                                   :: ierr
+    select case(dir)
+      case(1)
+        aface=dl(2)*dl(3)
+      case(2)
+        aface=dl(3)*dl(1)
+      case(3)
+        aface=dl(2)*dl(1)
+      case default
+        print*, "invalid dir"
+    end select
+    q = 0._rp
+    !$acc data copy(q) async(1)
+    !$acc parallel loop collapse(3) default(present) reduction(+:q) async(1)
+    !$OMP PARALLEL DO   COLLAPSE(3) DEFAULT(shared)  REDUCTION(+:q)
+    do k = 1,n(3)
+      do j = 1,n(2)
+        do i = 1,n(1)
+          q = q + field_id(i,j,k)*aface
+        end do
+      end do
+    end do
+    !$acc end data
+    !$acc wait(1)
+    call MPI_ALLREDUCE(MPI_IN_PLACE,q,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    ! we do this bcs now whole domain isnt covered w/ fluid cells. 
+    ! some of them are solid cells and we need take them out of calculation
+    ! since CaNS grid_vol_ratio calcultes over the whole domain which includes
+    ! the solids cells to therefore we find the fluid cells too. 
+    q=real(q/n(dir),kind=rp)
+  end subroutine calc_mean_flow_easy
   pure integer function f_sizeof(val) result(isize)
     !
     ! returns storage size of the scalar argument val in bytes

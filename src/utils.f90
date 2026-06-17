@@ -81,10 +81,11 @@ contains
     ! the solids cells to therefore we find the fluid cells too. 
     mean=mean/vol
   end subroutine calc_mean_flow
-  subroutine calc_mean_flow_easy(field_id,q,n,dl,dir)
+  subroutine calc_mean_flow_easy(mask_id,field_id,q,n,dl,dir)
     use mpi
     use mod_types
     implicit none
+    logical,intent(in)                        :: mask_id(0:,0:,0:) 
     integer , intent(in)                      :: dir
     real(rp), intent(in), dimension(3)        :: dl
     integer , intent(in), dimension(3)        :: n
@@ -110,7 +111,9 @@ contains
     do k = 1,n(3)
       do j = 1,n(2)
         do i = 1,n(1)
-          q = q + field_id(i,j,k)*aface
+          if(mask_id(i,j,k))then
+            q = q + field_id(i,j,k)*aface
+          endif
         end do
       end do
     end do

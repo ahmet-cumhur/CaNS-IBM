@@ -111,7 +111,7 @@ contains
     do k = 1,n(3)
       do j = 1,n(2)
         do i = 1,n(1)
-          if(mask_id(i,j,k))then
+          if(.not.mask_id(i,j,k))then
             q = q + field_id(i,j,k)*aface
           endif
         end do

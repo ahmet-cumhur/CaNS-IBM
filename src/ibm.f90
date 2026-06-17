@@ -188,9 +188,17 @@ module mod_ibm
         real(rp),intent(in)                         :: x,y,z,l_n
         real(rp),intent(out)                        :: lambda
         real(rp)                                    :: l_fluid,l_solid,l_int,l_diff
-        real(rp)                                    :: eps=1e-10_rp
+        real(rp)                                    :: eps
         integer                                     ::  n_iter
         lambda=0._rp
+        select case(case_num)
+            case(1)
+                eps = 1e-10*dl(1)
+            case(2)
+                eps = 1e-10*dl(2)
+            case(3)
+                eps = 1e-10*dl(3)
+        end select
         select case(case_num)
             case(1)
                 l_fluid = x;l_solid = l_n;l_int=0._rp;l_diff=0._rp

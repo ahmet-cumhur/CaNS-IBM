@@ -5,16 +5,19 @@
 !
 ! -
 module mod_rk
-  use mod_mom  , only: momx_a => momx_a_vv, &
-                       momy_a => momy_a_vv, &
-                       momz_a => momz_a_vv, &
+  use mod_mom  , only: momx_a, &
+                       momy_a, &
+                       momz_a, &
+                       momx_a_vv, &
+                       momy_a_vv, &
+                       momz_a_vv, &
                        momx_d,momy_d,momz_d, &
                        momx_p,momy_p,momz_p, &
                        cmpt_wallshear, &
                        momx_d_xy,momy_d_xy,momz_d_xy, &
                        momx_d_z ,momy_d_z ,momz_d_z, &
                        mom_xyz_ad
-  use mod_param, only: is_impdiff,is_impdiff_1d,is_boussinesq_buoyancy,is_fast_mom_kernels,ibm_2nd
+  use mod_param, only: is_impdiff,is_impdiff_1d,is_boussinesq_buoyancy,is_fast_mom_kernels,ibm_2nd,is_ibm
   use mod_scal , only: scal,cmpt_scalflux,scalar
   use mod_utils, only: bulk_mean
   use mod_types
@@ -155,10 +158,16 @@ module mod_rk
           call momz_d_z( n(1),n(2),n(3),dzci  ,dzfi  ,visc,w,dwdtrkd)
         end if
       end if
-      call momx_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dudtrk)
-      call momy_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dvdtrk)
-      call momz_a(n(1),n(2),n(3),dli(1),dli(2),dzci,dzfi,u,v,w,dwdtrk)
+      if(is_ibm)then
+        call momx_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dudtrk)
+        call momy_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dvdtrk)
+        call momz_a(n(1),n(2),n(3),dli(1),dli(2),dzci,u,v,w,dwdtrk)
+      else
+        call momx_a_vv(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dudtrk)
+        call momy_a_vv(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dvdtrk)
+        call momz_a_vv(n(1),n(2),n(3),dli(1),dli(2),dzci,dzfi,u,v,w,dwdtrk)
     end if
+  endif
     !
 #if !defined(_LOOP_UNSWITCHING)
     !$acc parallel loop collapse(3) default(present) async(1)

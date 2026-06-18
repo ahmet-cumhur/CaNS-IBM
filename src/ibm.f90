@@ -27,8 +27,8 @@ module mod_ibm
                 i=modulo(t,3)+1
                 ii=modulo(t+1,3)+1
                 if(ibm_direction(side,t))then
-                    height(side,t)=amp_l(side,i)*0.5_rp*(sin(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
-                                   amp_l(side,ii)*0.5_rp*(sin(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
+                    height(side,t)=amp_l(side,i)*0.5_rp*(1._rp+sin(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
+                                   amp_l(side,ii)*0.5_rp*(1._rp+sin(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
                 else
                     height(side,t)=0._rp
                 endif
@@ -78,9 +78,9 @@ module mod_ibm
                     jj = lo(2)+j-1
                     kk = lo(3)+k-1
                     ! we create the real location of each velocity here
-                    x = (real(ii,rp) -0.5d0- real(dix,rp)*0.5d0)*dl(1)
-                    y = (real(jj,rp) -0.5d0- real(diy,rp)*0.5d0)*dl(2)
-                    z = (real(kk,rp) -0.5d0- real(diz,rp)*0.5d0)*dl(3)
+                    x = (real(ii,rp) +0.5d0- real(dix,rp)*0.5d0)*dl(1)
+                    y = (real(jj,rp) +0.5d0- real(diy,rp)*0.5d0)*dl(2)
+                    z = (real(kk,rp) +0.5d0- real(diz,rp)*0.5d0)*dl(3)
                     if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
                         mask_id(i,j,k) = .true.
                     endif 
@@ -116,9 +116,9 @@ module mod_ibm
                     jj = lo(2)+j-1
                     kk = lo(3)+k-1
                     ! we create the real location of each velocity here
-                    x = (real(ii,rp) -0.5d0- real(dix,rp)*0.5d0)*dl(1)
-                    y = (real(jj,rp) -0.5d0- real(diy,rp)*0.5d0)*dl(2)
-                    z = (real(kk,rp) -0.5d0- real(diz,rp)*0.5d0)*dl(3)
+                    x = (real(ii,rp) +0.5d0- real(dix,rp)*0.5d0)*dl(1)
+                    y = (real(jj,rp) +0.5d0- real(diy,rp)*0.5d0)*dl(2)
+                    z = (real(kk,rp) +0.5d0- real(diz,rp)*0.5d0)*dl(3)
                     if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
                         mask_id(i,j,k) = .true.
                     endif 
@@ -193,11 +193,11 @@ module mod_ibm
         lambda=0._rp
         select case(case_num)
             case(1)
-                eps = 1.e-5_rp*dl(1)
+                eps = 1.e-10_rp*dl(1)
             case(2)
-                eps = 1.e-5_rp*dl(2)
+                eps = 1.e-10_rp*dl(2)
             case(3)
-                eps = 1.e-5_rp*dl(3)
+                eps = 1.e-10_rp*dl(3)
         end select
         select case(case_num)
             case(1)

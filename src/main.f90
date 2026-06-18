@@ -534,6 +534,7 @@ program cans
         call apply_ibm_staircase(v,mask_v,dtrk)
         call apply_ibm_staircase(w,mask_w,dtrk)
       endif
+      call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
       !*******************!
       !****//IBM-2nd\\****!
       if(ibm_2nd)then

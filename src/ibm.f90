@@ -262,9 +262,9 @@ module mod_ibm
         logical,intent(in),dimension(0:,0:,0:)      :: mask_id
         real(rp),intent(in)                         :: dt
         integer :: i,j,k
-        do k = lbound(field,3),ubound(field,3)
-            do j = lbound(field,2),ubound(field,2)
-                do i = lbound(field,1),ubound(field,1)
+        do k = lbound(field,3)+1,ubound(field,3)-1
+            do j = lbound(field,2)+1,ubound(field,2)-1
+                do i = lbound(field,1)+1,ubound(field,1)-1
                     if (mask_id(i,j,k).eqv..true.)then
                         field(i,j,k) = 0._rp 
                     endif

@@ -656,7 +656,7 @@ module mod_rk
     real(rp),intent(in)                         :: dt_loop,visc
     real(rp), intent(in),dimension(3)           :: dl
     real(rp)                                    :: ksi_l,e_l,dt_visc,eps
-    integer                                     :: i,j,k
+    integer                                     :: i,j,k,cnt
     dt_visc = dt_loop*visc
     eps=1e-10_rp
     do k=lbound(laplacian_id,3),ubound(laplacian_id,3)
@@ -671,6 +671,11 @@ module mod_rk
                               ksi_l**2/6._rp+ksi_l**3/24._rp)
           endif
           A_id(i,j,k)=ksi_l+B_id(i,j,k)
+
+          !if (abs(A_id(i,j,k)-1._rp) > 1.e-10_rp.and.cnt<10) then
+          !  cnt=cnt+1
+          !  print *, "A_ nontrivial:", i,j,k, A_id(i,j,k), B_id(i,j,k), laplacian_id(i,j,k)
+          !endif
         end do
       end do
     end do

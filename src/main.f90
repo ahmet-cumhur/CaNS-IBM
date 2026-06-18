@@ -541,6 +541,15 @@ program cans
         call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
         call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
       endif
+      if (ibm_2nd) then
+        !print *, "IBM2 active"
+        !print *, "A_u min/max:", minval(A_u), maxval(A_u)
+        !print *, "B_u min/max:", minval(B_u), maxval(B_u)
+        !print *, "A_v min/max:", minval(A_v), maxval(A_v)
+        !print *, "B_v min/max:", minval(B_v), maxval(B_v)
+        !print *, "A_w min/max:", minval(A_w), maxval(A_w)
+        !print *, "B_w min/max:", minval(B_w), maxval(B_w)
+      endif
       !*******************!
       do iscal=1,nscal
         s => scalars(iscal)
@@ -568,6 +577,7 @@ program cans
         call solve_helmholtz(n,ng,hi,arrplanw,normfftw,alpha, &
                              lambdaxyw,aw,bw,cw,rhsbw%x,rhsbw%y,rhsbw%z,is_bound,cbcvel(:,:,3),['c','c','f'],w)
       end if
+      !*******************!
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
       !****//IBM\\****!
       if(is_ibm)then
@@ -575,6 +585,8 @@ program cans
         call apply_ibm_staircase(v,mask_v,dtrk)
         call apply_ibm_staircase(w,mask_w,dtrk)
       endif
+      !*******************!
+      call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
       !*******************!
       call fillps(n,dli,dzfi,dtrki,u,v,w,pp)
       call updt_rhs_b(['c','c','c'],cbcpre,n,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)

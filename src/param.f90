@@ -100,7 +100,7 @@ logical, protected :: is_debug = .true., is_debug_poisson = .false., &
 !
 logical, protected :: is_impdiff = .false., is_impdiff_1d = .false., &
                       is_poisson_pcr_tdma = .false., &
-                      is_fast_mom_kernels = .false., &
+                      is_fast_mom_kernels = .true., &
                       is_gridpoint_natural_channel = .false.
 !
 ! i/o backend parameters
@@ -166,6 +166,7 @@ contains
     namelist /numerics/ &
                        is_impdiff,is_impdiff_1d, &
                        is_poisson_pcr_tdma, &
+                       is_fast_mom_kernels, &
                        is_gridpoint_natural_channel
     namelist /other_options/ &
                             is_debug,is_debug_poisson, &

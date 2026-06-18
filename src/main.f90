@@ -499,14 +499,9 @@ program cans
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
   endif
-  if(ibm_2nd)then
-  print*, "max lap_u local = ", maxval(abs(lap_u))
-  print*, "max lap_v local = ", maxval(abs(lap_v))
-  print*, "max lap_w local = ", maxval(abs(lap_w))
-  endif
   if(ibm_2nd .and. .not.is_ibm)then
-  if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"
-  error stop
+    if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"
+    error stop
   endif
 !*****************************
   !
@@ -541,15 +536,6 @@ program cans
         call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
         call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
         call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
-      endif
-      if (ibm_2nd) then
-        !print *, "IBM2 active"
-        !print *, "A_u min/max:", minval(A_u), maxval(A_u)
-        !print *, "B_u min/max:", minval(B_u), maxval(B_u)
-        !print *, "A_v min/max:", minval(A_v), maxval(A_v)
-        !print *, "B_v min/max:", minval(B_v), maxval(B_v)
-        !print *, "A_w min/max:", minval(A_w), maxval(A_w)
-        !print *, "B_w min/max:", minval(B_w), maxval(B_w)
       endif
       !*******************!
       do iscal=1,nscal

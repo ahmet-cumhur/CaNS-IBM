@@ -529,11 +529,11 @@ program cans
       dtrk = sum(rkcoeff(:,irk))*dt
       dtrki = dtrk**(-1)
       !****//IBM\\****!
-      !if(is_ibm)then
-      !  call apply_ibm_staircase(u,mask_u,dtrk)
-      !  call apply_ibm_staircase(v,mask_v,dtrk)
-      !  call apply_ibm_staircase(w,mask_w,dtrk)
-      !endif
+      if(is_ibm)then
+        call apply_ibm_staircase(u,mask_u,dtrk)
+        call apply_ibm_staircase(v,mask_v,dtrk)
+        call apply_ibm_staircase(w,mask_w,dtrk)
+      endif
       !*******************!
       !****//IBM-2nd\\****!
       if(ibm_2nd)then

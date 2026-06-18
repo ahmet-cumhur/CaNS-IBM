@@ -27,8 +27,8 @@ module mod_ibm
                 i=modulo(t,3)+1
                 ii=modulo(t+1,3)+1
                 if(ibm_direction(side,t))then
-                    height(side,t)=amp_l(side,i)*0.5_rp*(1._rp+sin(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
-                    amp_l(side,ii)*0.5_rp*(1._rp+sin(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
+                    height(side,t)=amp_l(side,i)*0.5_rp*(sin(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
+                                   amp_l(side,ii)*0.5_rp*(sin(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
                 else
                     height(side,t)=0._rp
                 endif
@@ -193,11 +193,11 @@ module mod_ibm
         lambda=0._rp
         select case(case_num)
             case(1)
-                eps = 1.e-10_rp*dl(1)
+                eps = 1.e-5_rp*dl(1)
             case(2)
-                eps = 1.e-10_rp*dl(2)
+                eps = 1.e-5_rp*dl(2)
             case(3)
-                eps = 1.e-10_rp*dl(3)
+                eps = 1.e-5_rp*dl(3)
         end select
         select case(case_num)
             case(1)
@@ -207,7 +207,7 @@ module mod_ibm
             case(3)
                 l_fluid = z;l_solid = l_n;l_int=0._rp;l_diff=0._rp
         end select
-        do n_iter=1,50
+        do n_iter=1,60
             l_int=real((l_solid+l_fluid)/2._rp,kind=rp)
             select case(case_num)
                 case(1)!x

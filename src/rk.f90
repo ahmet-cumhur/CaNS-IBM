@@ -5,16 +5,19 @@
 !
 ! -
 module mod_rk
-  use mod_mom  , only: momx_a => momx_a_vv, &
-                       momy_a => momy_a_vv, &
-                       momz_a => momz_a_vv, &
+  use mod_mom  , only: momx_a, &
+                       momy_a, &
+                       momz_a, &
+                       momx_a_vv, &
+                       momy_a_vv, &
+                       momz_a_vv, &
                        momx_d,momy_d,momz_d, &
                        momx_p,momy_p,momz_p, &
                        cmpt_wallshear, &
                        momx_d_xy,momy_d_xy,momz_d_xy, &
                        momx_d_z ,momy_d_z ,momz_d_z, &
                        mom_xyz_ad
-  use mod_param, only: is_impdiff,is_impdiff_1d,is_boussinesq_buoyancy,is_fast_mom_kernels
+  use mod_param, only: is_impdiff,is_impdiff_1d,is_boussinesq_buoyancy,is_fast_mom_kernels,ibm_2nd,is_ibm
   use mod_scal , only: scal,cmpt_scalflux,scalar
   use mod_utils, only: bulk_mean
   use mod_types
@@ -22,7 +25,8 @@ module mod_rk
   public rk,rk_scal
   contains
   subroutine rk(rkpar,n,dli,dzci,dzfi,grid_vol_ratio_c,grid_vol_ratio_f,dt,visc,p, &
-                is_forced,velf,bforce,gacc,beta,scalars,dudtrko,dvdtrko,dwdtrko,u,v,w,f)
+                is_forced,velf,bforce,gacc,beta,scalars,dudtrko,dvdtrko,dwdtrko,u,v,w,f,&
+                A_u,A_v,A_w,B_u,B_v,B_w)!2ndIBM additions
 #if defined(_OPENACC)
     use mod_common_cudecomp, only: dudtrk_t => work, &
                                    dvdtrk_t => solver_buf_0, &
@@ -58,6 +62,13 @@ module mod_rk
     real(rp) :: factor1,factor2,factor12
     logical :: is_buoyancy
     integer  :: i,j,k
+    !2nd IBM
+    real(rp),intent(in) :: A_u(0:,0:,0:)
+    real(rp),intent(in) :: A_v(0:,0:,0:)
+    real(rp),intent(in) :: A_w(0:,0:,0:)
+    real(rp),intent(in) :: B_u(0:,0:,0:)
+    real(rp),intent(in) :: B_v(0:,0:,0:)
+    real(rp),intent(in) :: B_w(0:,0:,0:)
     !
     factor1 = rkpar(1)*dt
     factor2 = rkpar(2)*dt
@@ -147,10 +158,16 @@ module mod_rk
           call momz_d_z( n(1),n(2),n(3),dzci  ,dzfi  ,visc,w,dwdtrkd)
         end if
       end if
-      call momx_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dudtrk)
-      call momy_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dvdtrk)
-      call momz_a(n(1),n(2),n(3),dli(1),dli(2),dzci,dzfi,u,v,w,dwdtrk)
+      if(is_ibm)then
+        call momx_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dudtrk)
+        call momy_a(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dvdtrk)
+        call momz_a(n(1),n(2),n(3),dli(1),dli(2),dzci,u,v,w,dwdtrk)
+      else
+        call momx_a_vv(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dudtrk)
+        call momy_a_vv(n(1),n(2),n(3),dli(1),dli(2),dzfi,u,v,w,dvdtrk)
+        call momz_a_vv(n(1),n(2),n(3),dli(1),dli(2),dzci,dzfi,u,v,w,dwdtrk)
     end if
+  endif
     !
 #if !defined(_LOOP_UNSWITCHING)
     !$acc parallel loop collapse(3) default(present) async(1)
@@ -158,20 +175,35 @@ module mod_rk
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
+          if(.not.ibm_2nd)then
           u(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
                                 factor12*(bforce(1) - dli(1)*( p(i+1,j,k)-p(i,j,k)))
+          else
+            u(i,j,k) = (B_u(i,j,k)*u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
+                                factor12*(bforce(1) - dli(1)*( p(i+1,j,k)-p(i,j,k))))/A_u(i,j,k)
+          endif                                
           if(is_buoyancy) then
             u(i,j,k) = u(i,j,k) - factor12*gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k))
           end if
           !
+          if(.not.ibm_2nd)then
           v(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
                                 factor12*(bforce(2) - dli(2)*( p(i,j+1,k)-p(i,j,k)))
+          else
+              v(i,j,k) = (B_v(i,j,k)*v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
+                                factor12*(bforce(2) - dli(2)*( p(i,j+1,k)-p(i,j,k))))/A_v(i,j,k)                                            
+          endif
           if(is_buoyancy) then
             v(i,j,k) = v(i,j,k) - factor12*gacc(2)*beta*0.5*(s(i,j+1,k)+s(i,j,k))
           end if
           !
+          if(.not.ibm_2nd)then
           w(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
                                 factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k)))
+          else
+            w(i,j,k) = (B_w(i,j,k)*w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
+                                factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k))))/A_w(i,j,k)
+          endif
           if(is_buoyancy) then
             w(i,j,k) = w(i,j,k) - factor12*gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k))
           end if
@@ -191,12 +223,21 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
+            if(.not.ibm_2nd)then
             u(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
                                   factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k)))
             v(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
                                   factor12*(bforce(2) - dli(2)*(p(i,j+1,k)-p(i,j,k)))
             w(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
                                   factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k)))
+            else
+              u(i,j,k) = (B_u(i,j,k)*u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
+                                factor12*(bforce(1) - dli(1)*( p(i+1,j,k)-p(i,j,k))))/A_u(i,j,k)
+              v(i,j,k) = (B_v(i,j,k)*v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
+                                factor12*(bforce(2) - dli(2)*( p(i,j+1,k)-p(i,j,k))))/A_v(i,j,k)
+              w(i,j,k) = (B_w(i,j,k)*w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
+                                factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k))))/A_w(i,j,k)
+            endif
           end do
         end do
       end do
@@ -206,6 +247,7 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
+            if(.not.ibm_2nd)then
             u(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
                                   factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k)) + &
                                             dudtrkd(i,j,k))
@@ -215,6 +257,17 @@ module mod_rk
             w(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
                                   factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k)) + &
                                             dwdtrkd(i,j,k))
+            else
+              u(i,j,k) = (B_u(i,j,k)*u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
+                                  factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k)) + &
+                                            dudtrkd(i,j,k)))/A_u(i,j,k)
+              v(i,j,k) = (B_v(i,j,k)*v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
+                                    factor12*(bforce(2) - dli(2)*(p(i,j+1,k)-p(i,j,k)) + &
+                                              dvdtrkd(i,j,k)))/A_v(i,j,k)
+              w(i,j,k) = (B_w(i,j,k)*w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
+                                    factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k)) + &
+                                              dwdtrkd(i,j,k)))/A_w(i,j,k)
+            endif
           end do
         end do
       end do
@@ -224,6 +277,7 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
+            if(.not.ibm_2nd)then
             u(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
                                   factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k))) &
                                           - gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k))
@@ -233,6 +287,17 @@ module mod_rk
             w(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
                                   factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k))) &
                                           - gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k))
+            else
+                u(i,j,k) = (B_u(i,j,k)*u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
+                                      factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k))) &
+                                              - gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k)))/A_u(i,j,k)
+                v(i,j,k) = (B_v(i,j,k)*v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
+                                      factor12*(bforce(2) - dli(2)*(p(i,j+1,k)-p(i,j,k))) &
+                                              - gacc(2)*beta*0.5*(s(i,j+1,k)+s(i,j,k)))/A_v(i,j,k)
+                w(i,j,k) = (B_w(i,j,k)*w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
+                                      factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k))) &
+                                              - gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k)))/A_w(i,j,k)
+            endif
           end do
         end do
       end do
@@ -242,6 +307,7 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
+            if(.not. ibm_2nd)then
             u(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
                                   factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k)) &
                                           - gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k)) + &
@@ -254,6 +320,20 @@ module mod_rk
                                   factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k)) &
                                           - gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k)) + &
                                             dwdtrkd(i,j,k))
+            else
+                u(i,j,k) = (B_u(i,j,k)*u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k) + &
+                                      factor12*(bforce(1) - dli(1)*(p(i+1,j,k)-p(i,j,k)) &
+                                              - gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k)) + &
+                                                dudtrkd(i,j,k)))/A_u(i,j,k)
+                v(i,j,k) = (B_v(i,j,k)*v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
+                                      factor12*(bforce(2) - dli(2)*(p(i,j+1,k)-p(i,j,k)) &
+                                              - gacc(2)*beta*0.5*(s(i,j+1,k)+s(i,j,k)) + &
+                                                dvdtrkd(i,j,k)))/A_v(i,j,k)
+                w(i,j,k) = (B_w(i,j,k)*w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
+                                      factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k)) &
+                                              - gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k)) + &
+                                                dwdtrkd(i,j,k)))/A_w(i,j,k)
+            endif
           end do
         end do
       end do
@@ -575,4 +655,39 @@ module mod_rk
       end if
     end if
   end subroutine cmpt_bulk_forcing_alternative
+
+!********//IBM\\*********!
+  subroutine calc_a_b(laplacian_id,A_id,B_id,dt_loop,visc,dl)
+    implicit none
+    real(rp),intent(in),dimension(0:,0:,0:)  :: laplacian_id
+    real(rp),intent(inout),dimension(0:,0:,0:)  :: A_id
+    real(rp),intent(inout),dimension(0:,0:,0:)  :: B_id
+    real(rp),intent(in)                         :: dt_loop,visc
+    real(rp), intent(in),dimension(3)           :: dl
+    real(rp)                                    :: ksi_l,e_l,dt_visc,eps
+    integer                                     :: i,j,k,cnt
+    dt_visc = dt_loop*visc
+    eps=1e-10_rp
+    do k=lbound(laplacian_id,3),ubound(laplacian_id,3)
+      do j=lbound(laplacian_id,2),ubound(laplacian_id,2)
+        do i=lbound(laplacian_id,1),ubound(laplacian_id,1)
+          ksi_l=laplacian_id(i,j,k)*dt_visc
+          e_l=exp(ksi_l)-1._rp
+          if(e_l>eps)then
+            B_id(i,j,k)=ksi_l/e_l
+          else
+            B_id(i,j,k)=1._rp/(1._rp+ksi_l/2._rp+&
+                              ksi_l**2/6._rp+ksi_l**3/24._rp)
+          endif
+          A_id(i,j,k)=ksi_l+B_id(i,j,k)
+
+          !if (abs(A_id(i,j,k)-1._rp) > 1.e-10_rp.and.cnt<10) then
+          !  cnt=cnt+1
+          !  print *, "A_ nontrivial:", i,j,k, A_id(i,j,k), B_id(i,j,k), laplacian_id(i,j,k)
+          !endif
+        end do
+      end do
+    end do
+  end subroutine calc_a_b
+!************************!
 end module mod_rk

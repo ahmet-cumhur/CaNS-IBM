@@ -44,6 +44,8 @@ io_backend = 'mpiio'
 
 &ibm
 is_ibm = T
+do_richardson = T
+ibm_2nd = T
 ibm_direction = F,F, F,F, T,F 
 l_0 = 0.0,0.0, 0.0,0.0, 0.1,0.0
 n_wave = 2,0, 1,0, 0,0

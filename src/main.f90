@@ -43,7 +43,7 @@ program cans
   use mod_initsolver     , only: initsolver
   use mod_load           , only: load_one
   use mod_mom            , only: bulk_forcing
-  use mod_rk             , only: rk,rk_scal
+  use mod_rk             , only: rk,rk_scal,calc_a_b
   use mod_output         , only: out0d,gen_alias,out1d,out1d_chan,out2d,out3d,write_log_output,write_visu_2d,write_visu_3d
   use mod_param          , only: ng,l,dl,dli, &
                                  gtype,gr, &
@@ -67,11 +67,13 @@ program cans
                                  is_poisson_pcr_tdma,      &
                                  is_mask_divergence_check, &
                                  is_ibm,           &
+                                 ibm_2nd,          &
+                                 do_richardson,    &
                                  ibm_direction,    &
                                  l_0,              &
                                  n_wave,           &
                                  amp_l,            &
-                                 phase_l   
+                                 phase_l                 
   use mod_sanity         , only: test_sanity_input,test_sanity_solver
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_solve_helmholtz, only: solve_helmholtz,rhs_bound
@@ -83,7 +85,8 @@ program cans
   use mod_common_cudecomp, only: istream_acc_queue_1,ap_z_ptdma
 #endif
   use mod_updatep        , only: updatep
-  use mod_utils          , only: bulk_mean
+  use mod_utils          , only: bulk_mean,calc_mean_flow,&
+                                 calc_mean_flow_easy
 #if defined(_OPENACC)
   use mod_utils          , only: device_memory_footprint
 #endif
@@ -155,9 +158,21 @@ program cans
   integer :: k,kk
   logical :: is_done,kill
 !********IBM*******!
-  logical,allocatable :: mask_u(:,:,:)
-  logical,allocatable :: mask_v(:,:,:)
-  logical,allocatable :: mask_w(:,:,:)
+  logical,allocatable   :: mask_u(:,:,:)
+  logical,allocatable   :: mask_v(:,:,:)
+  logical,allocatable   :: mask_w(:,:,:)
+  real(rp),allocatable  :: lap_u(:,:,:)
+  real(rp),allocatable  :: lap_v(:,:,:)
+  real(rp),allocatable  :: lap_w(:,:,:)
+
+  real(rp),allocatable  :: A_u(:,:,:)
+  real(rp),allocatable  :: A_v(:,:,:)
+  real(rp),allocatable  :: A_w(:,:,:)
+  real(rp),allocatable  :: B_u(:,:,:)
+  real(rp),allocatable  :: B_v(:,:,:)
+  real(rp),allocatable  :: B_w(:,:,:)
+
+  real(rp)              :: mean_u,mean_v,mean_w
 !******************!
   !
   call MPI_INIT(ierr)
@@ -446,6 +461,26 @@ program cans
     mask_v = .false.
     mask_w = .false.
   endif
+  if(ibm_2nd)then
+    allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(lap_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(A_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(A_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(B_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(B_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(B_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    lap_u=0._rp
+    lap_v=0._rp
+    lap_w=0._rp
+    A_u=1._rp
+    A_v=1._rp
+    A_w=1._rp
+    B_u=1._rp
+    B_v=1._rp
+    B_w=1._rp
+  endif
   if(is_ibm)then
     ! we fill the ibm masks here
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
@@ -454,6 +489,24 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l)
+  endif
+  if(is_ibm.and.ibm_2nd)then
+    print*, "***2nd Order IBM coefficients are deploying***"
+    call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+    call set_ibm_2nd(lo,mask_v,lap_v,0,1,0&
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+    call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+  endif
+  if(ibm_2nd)then
+  print*, "max lap_u local = ", maxval(abs(lap_u))
+  print*, "max lap_v local = ", maxval(abs(lap_v))
+  print*, "max lap_w local = ", maxval(abs(lap_w))
+  endif
+  if(ibm_2nd .and. .not.is_ibm)then
+  if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"
+  error stop
   endif
 !*****************************
   !
@@ -475,6 +528,30 @@ program cans
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       dtrki = dtrk**(-1)
+      !****//IBM\\****!
+      if(is_ibm)then
+        call apply_ibm_staircase(u,mask_u,dtrk)
+        call apply_ibm_staircase(v,mask_v,dtrk)
+        call apply_ibm_staircase(w,mask_w,dtrk)
+      endif
+      call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
+      !*******************!
+      !****//IBM-2nd\\****!
+      if(ibm_2nd)then
+        call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
+        call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
+        call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
+      endif
+      if (ibm_2nd) then
+        !print *, "IBM2 active"
+        !print *, "A_u min/max:", minval(A_u), maxval(A_u)
+        !print *, "B_u min/max:", minval(B_u), maxval(B_u)
+        !print *, "A_v min/max:", minval(A_v), maxval(A_v)
+        !print *, "B_v min/max:", minval(B_v), maxval(B_v)
+        !print *, "A_w min/max:", minval(A_w), maxval(A_w)
+        !print *, "B_w min/max:", minval(B_w), maxval(B_w)
+      endif
+      !*******************!
       do iscal=1,nscal
         s => scalars(iscal)
         call rk_scal(rkcoeff(:,irk),n,dli,l,dzci,dzfi,grid_vol_ratio_f,s%alpha,dt,is_bound,u,v,w, &
@@ -488,7 +565,8 @@ program cans
         call boundp(s%cbc,n,s%bc,nb,is_bound,dl,dzc,s%val)
       end do
       call rk(rkcoeff(:,irk),n,dli,dzci,dzfi,grid_vol_ratio_c,grid_vol_ratio_f,dt,visc,p, &
-              is_forced,velf,bforce,gacc,beta,scalars,dudtrko,dvdtrko,dwdtrko,u,v,w,f)
+              is_forced,velf,bforce,gacc,beta,scalars,dudtrko,dvdtrko,dwdtrko,u,v,w,f,&
+              A_u,A_v,A_w,B_u,B_v,B_w)
       call bulk_forcing(n,is_forced,f,u,v,w)
       dpdl(:) = dpdl(:) + f(:)
       if(is_impdiff) then
@@ -500,12 +578,17 @@ program cans
         call solve_helmholtz(n,ng,hi,arrplanw,normfftw,alpha, &
                              lambdaxyw,aw,bw,cw,rhsbw%x,rhsbw%y,rhsbw%z,is_bound,cbcvel(:,:,3),['c','c','f'],w)
       end if
+      !*******************!
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
+      !****//IBM\\****!
       if(is_ibm)then
         call apply_ibm_staircase(u,mask_u,dtrk)
         call apply_ibm_staircase(v,mask_v,dtrk)
         call apply_ibm_staircase(w,mask_w,dtrk)
       endif
+      !*******************!
+      call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
+      !*******************!
       call fillps(n,dli,dzfi,dtrki,u,v,w,pp)
       call updt_rhs_b(['c','c','c'],cbcpre,n,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)
       call solver(n,ng,arrplanp,normfftp,lambdaxyp,ap,bp,cp,cbcpre,['c','c','c'],pp,is_ptdma_update_p,ap_d,cp_d)
@@ -683,6 +766,16 @@ program cans
       if(myid == 0) print*, dt12av/(1.*product(dims)),dt12min,dt12max
     end if
   end do
+  !***//calc-mean-flow\\***!
+  if(do_richardson)then
+    call calc_mean_flow_easy(mask_u,u,mean_u,n,dl,1)
+    call calc_mean_flow_easy(mask_v,v,mean_v,n,dl,2)
+    call calc_mean_flow_easy(mask_w,w,mean_w,n,dl,3)
+    if(myid==0)then
+      print*,"mean flow for each dir:",mean_u,mean_v,mean_w
+    endif
+  endif
+  !************************!
   !
   ! clear ffts
   !

@@ -78,9 +78,9 @@ module mod_ibm
                     jj = lo(2)+j-1
                     kk = lo(3)+k-1
                     ! we create the real location of each velocity here
-                    x = (real(ii,rp) +0.5d0- real(dix,rp)*0.5d0)*dl(1)
-                    y = (real(jj,rp) +0.5d0- real(diy,rp)*0.5d0)*dl(2)
-                    z = (real(kk,rp) +0.5d0- real(diz,rp)*0.5d0)*dl(3)
+                    x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
+                    y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
+                    z = (real(kk,rp) -0.5d0+ real(diz,rp)*0.5d0)*dl(3)
                     if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
                         mask_id(i,j,k) = .true.
                     endif 
@@ -116,9 +116,9 @@ module mod_ibm
                     jj = lo(2)+j-1
                     kk = lo(3)+k-1
                     ! we create the real location of each velocity here
-                    x = (real(ii,rp) +0.5d0- real(dix,rp)*0.5d0)*dl(1)
-                    y = (real(jj,rp) +0.5d0- real(diy,rp)*0.5d0)*dl(2)
-                    z = (real(kk,rp) +0.5d0- real(diz,rp)*0.5d0)*dl(3)
+                    x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
+                    y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
+                    z = (real(kk,rp) -0.5d0+ real(diz,rp)*0.5d0)*dl(3)
                     if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
                         mask_id(i,j,k) = .true.
                     endif 

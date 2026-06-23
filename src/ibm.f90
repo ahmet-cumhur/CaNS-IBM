@@ -264,6 +264,8 @@ module mod_ibm
         logical,intent(in),dimension(0:,0:,0:)      :: mask_id
         real(rp),intent(in)                         :: dt
         integer :: i,j,k
+        !$acc parallel loop collapse(3) default(present) async(1)
+        !$OMP parallel do   collapse(3) DEFAULT(shared)
         do k = lbound(field,3)+1,ubound(field,3)-1
             do j = lbound(field,2)+1,ubound(field,2)-1
                 do i = lbound(field,1)+1,ubound(field,1)-1

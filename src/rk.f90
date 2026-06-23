@@ -668,6 +668,8 @@ module mod_rk
     integer                                     :: i,j,k,cnt
     dt_visc = dt_loop*visc
     eps=1e-10_rp
+    !$acc parallel loop collapse(3) default(present) private(ksi_l,e_l) async(1)
+    !$OMP PARALLEL DO   COLLAPSE(3) DEFAULT(shared)
     do k=lbound(laplacian_id,3),ubound(laplacian_id,3)
       do j=lbound(laplacian_id,2),ubound(laplacian_id,2)
         do i=lbound(laplacian_id,1),ubound(laplacian_id,1)

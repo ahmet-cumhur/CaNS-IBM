@@ -489,6 +489,9 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l)
+#if defined (_OPENACC)
+    !$acc enter data copyin(mask_u,mask_v,mask_w)
+#endif
   endif
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
@@ -498,6 +501,11 @@ program cans
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+#if defined (_OPENACC)
+    !$acc enter data copyin(lap_u,lap_v,lap_w)
+    !$acc enter data create(A_u,A_v,A_w)
+    !$acc enter data create(B_u,B_v,B_w)
+#endif
   endif
   if(ibm_2nd .and. .not.is_ibm)then
     if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"

@@ -110,8 +110,9 @@ character(len=6) , protected :: io_ext = '.bin'
 logical          , protected :: is_use_compression = .false.
 ! IBM
 logical,protected     :: is_ibm=.false.
-logical,protected     :: do_richardson=.false.
 logical,protected     :: ibm_2nd=.false.
+logical,protected     :: do_richardson=.false.
+logical,protected     :: do_thakkar=.false.
 logical, protected    :: ibm_direction(0:1,3)=.false.
 real(rp), protected   :: l_0(0:1,3)=0._rp
 integer, protected    :: n_wave(0:1,3)=0._rp
@@ -174,8 +175,9 @@ contains
                             is_mask_divergence_check
     namelist /ibm/ &
                             is_ibm,           &
-                            ibm_2nd,          &
+                            ibm_2nd,          & 
                             do_richardson,    &
+                            do_thakkar,       &
                             ibm_direction,    &
                             l_0,              &
                             n_wave,           &
@@ -420,4 +422,19 @@ contains
 
     close(iunit)
   end subroutine read_input
+  !******************Thakkar************************!
+  subroutine overwrite_inputdata(nx,ny,nz,&
+                                 lx,ly,lz,&
+                                 dx,dy,dz,&
+                                 dxi,dyi,dzi)
+        use mpi
+        implicit none
+        integer,intent(in)                      :: nx,ny,nz
+        real(rp),intent(in)                     :: lx,ly,lz,dx,dy,dz,&
+                                                dxi,dyi,dzi    
+        l(1)=lx;ng(1)=nx;dl(1)=dx;dli(1)=dxi
+        l(2)=ly;ng(2)=ny;dl(2)=dy;dli(2)=dyi
+        l(3)=2*lz;ng(3)=nz;dl(3)=dz;dli(3)=dzi
+        !2lz is for using non-dimensionalization for half channel lenght
+    end subroutine overwrite_inputdata
 end module mod_param

@@ -69,11 +69,13 @@ program cans
                                  is_ibm,           &
                                  ibm_2nd,          &
                                  do_richardson,    &
+                                 do_thakkar,       &
                                  ibm_direction,    &
                                  l_0,              &
                                  n_wave,           &
                                  amp_l,            &
-                                 phase_l                 
+                                 phase_l,          &
+                                 overwrite_inputdata                 
   use mod_sanity         , only: test_sanity_input,test_sanity_solver
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_solve_helmholtz, only: solve_helmholtz,rhs_bound
@@ -93,8 +95,16 @@ program cans
   use mod_types
   use omp_lib
 !*****IBM******!
-  use             ::  mod_ibm
+  use mod_ibm
 !**************!
+!****Thakkar****!
+  use mod_thakkar ,only: read_thakkar_nfo,correct_hmap,read_thakkar_bin,&
+  th_lx => lx,th_ly => ly,th_lz => lz,&
+  th_nx => nx,th_ny => ny,th_nz => nz,&
+  th_dx => dx,th_dy => dy,th_dz => dz,&
+  th_dxi => dxi,th_dyi => dyi,th_dzi => dzi,&
+  th_map =>h_map
+!***************!
   implicit none
   integer , dimension(3) :: lo,hi,n,n_x_fft,n_y_fft,lo_z,hi_z,n_z
   real(rp), target, allocatable, dimension(:,:,:) :: u,v,w,p,pp
@@ -181,6 +191,17 @@ program cans
   ! read parameter file
   !
   call read_input(myid)
+!*******Thakkar*****!
+  if(do_thakkar)then
+    call read_thakkar_nfo(myid)
+    call read_thakkar_bin(myid)
+    call overwrite_inputdata(th_nx,th_ny,th_nz,&
+                             th_lx,th_ly,th_lz,&
+                             th_dx,th_dy,th_dz,&
+                             th_dxi,th_dyi,th_dzi)
+    call correct_hmap(lo,th_map,l,n,dl,1,0,0)
+  endif
+!*******************!
   !
   ! initialize MPI/OpenMP
   !
@@ -484,11 +505,11 @@ program cans
   if(is_ibm)then
     ! we fill the ibm masks here
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,do_thakkar,th_map)
     call set_ibm_staircase(lo,mask_v,0,1,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,do_thakkar,th_map)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,do_thakkar,th_map)
 #if defined (_OPENACC)
     !$acc enter data copyin(mask_u,mask_v,mask_w)
 #endif
@@ -496,11 +517,11 @@ program cans
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
     call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,do_thakkar,th_map)
     call set_ibm_2nd(lo,mask_v,lap_v,0,1,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,do_thakkar,th_map)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,do_thakkar,th_map)
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w)
     !$acc enter data create(A_u,A_v,A_w)

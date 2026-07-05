@@ -68,6 +68,7 @@ program cans
                                  is_mask_divergence_check, &
                                  is_ibm,           &
                                  ibm_2nd,          &
+                                 use_hmap,         &
                                  do_richardson,    &
                                  ibm_direction,    &
                                  l_0,              &
@@ -93,7 +94,8 @@ program cans
   use mod_types
   use omp_lib
 !*****IBM******!
-  use             ::  mod_ibm
+  use mod_ibm
+  use mod_thakkar           
 !**************!
   implicit none
   integer , dimension(3) :: lo,hi,n,n_x_fft,n_y_fft,lo_z,hi_z,n_z
@@ -173,6 +175,7 @@ program cans
   real(rp),allocatable  :: B_w(:,:,:)
 
   real(rp)              :: mean_u,mean_v,mean_w
+!*******HMAP********!
 !******************!
   !
   call MPI_INIT(ierr)
@@ -481,14 +484,18 @@ program cans
     B_v=1._rp
     B_w=1._rp
   endif
+  if(use_hmap)then
+    call read_thakkar_nfo(myid)
+    call read_thakkar_bin(myid)
+  endif
   if(is_ibm)then
     ! we fill the ibm masks here
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
     call set_ibm_staircase(lo,mask_v,0,1,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
   endif
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"

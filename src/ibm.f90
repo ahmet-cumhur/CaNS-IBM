@@ -1,6 +1,7 @@
 module mod_ibm
-    use :: mod_types 
-    use :: mod_param
+    use mod_types 
+    use mod_param
+    use mod_thakkar
     implicit none
     contains 
     ! we initalize the ibm coef. here
@@ -52,11 +53,95 @@ module mod_ibm
             endif   
         end do 
     end function isInbody
+    subroutine interpolate_hmap(nx_hmap,ny_hmap,x,y,z,lx,ly,lz,dx_hmap,dy_hmap,&
+                                ivelx_l,ivelx_r,ively_t,ively_b,rvelx_l,rvelx_r,rvely_t,rvely_b)
+        ! first lets conver the dimensions of the hmap to the real locations.
+        real(rp),intent(in)     :: lx,ly,lz,x,y,z
+        integer,intent(in)      :: nx_hmap,ny_hmap
+        integer,intent(out)     :: ivelx_l,ivelx_r,ively_t,ively_b
+        real(rp),intent(out)    :: rvelx_l,rvelx_r,rvely_t,rvely_b
+        real(rp),intent(out)    :: dx_hmap,dy_hmap
+        ivelx_l=0;ivelx_r=0;ively_t=0;ively_b=0;
+        rvelx_l=0._rp;rvelx_r=0._rp;rvely_t=0._rp;rvely_b=0._rp;
+        dx_hmap=0._rp;dy_hmap=0._rp
+        dx_hmap=lx/nx_hmap
+        dy_hmap=ly/ny_hmap
+
+        ivelx_l= floor(real(x/dx_hmap,kind=rp))
+        ivelx_r=ivelx_l+1
+        rvelx_l=ivelx_l*dx_hmap
+        rvelx_r=ivelx_r*dx_hmap
+        ivelx_l = modulo(ivelx_l,nx_hmap)
+        ivelx_r = modulo(ivelx_r,nx_hmap)
+
+        ively_b=floor(real(y/dy_hmap,kind=rp))
+        ively_t=ively_b+1
+        rvely_t=ively_t*dy_hmap
+        rvely_b=ively_b*dy_hmap
+        ively_b = modulo(ively_b,ny_hmap)
+        ively_t = modulo(ively_t,ny_hmap)
+        
+        
+    end subroutine interpolate_hmap
+    logical function isInBody_hmap(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,hmap,nx_hmap,ny_hmap)
+        implicit none
+        logical , intent(in), dimension(0:1,3)   :: ibm_direction
+        real(rp), intent(in), dimension(0:1,3)   :: amp_l
+        integer , intent(in), dimension(0:1,3)   :: n_wave
+        real(rp), intent(in), dimension(0:1,3)   :: l_0
+        real(rp), intent(in), dimension(0:1,3)   :: phase_l
+        integer , intent(in), dimension(3)       :: n
+        real(rp), intent(in), dimension(3)       :: l
+        real(rp),intent(in)                      :: x,y,z 
+        real(rp),parameter                       :: pi = 3.141592653589793_rp
+        real(rp)                                 :: height(0:1,3)
+        integer                                  :: side,t
+        real(rp)                                 :: xyz(3)
+        integer                                  :: i,ii
+        real(rp),intent(in)                      :: hmap(0:,0:)
+        integer,intent(in)                       :: nx_hmap,ny_hmap
+        integer                                  :: ivelx_l,ivelx_r,ively_t,ively_b
+        real(rp)                                 :: rvelx_l,rvelx_r,rvely_t,rvely_b
+        real(rp)                                 :: ce_xl,ce_xr,ce_yt,ce_yb
+        real(rp)                                 :: dx_hmap,dy_hmap
+        xyz = [x,y,z]
+        do side = 0,1
+            do t = 1,3
+                i=modulo(t,3)+1
+                ii=modulo(t+1,3)+1
+                call interpolate_hmap(nx_hmap,ny_hmap,x,y,z,l(1),l(2),l(3),dx_hmap,dy_hmap,&
+                                    ivelx_l,ivelx_r,ively_t,ively_b,rvelx_l,rvelx_r,rvely_t,rvely_b)
+                ce_xl=abs(x-rvelx_r);ce_xr=abs(x-rvelx_l)
+                ce_yt=abs(y-rvely_b);ce_yb=abs(y-rvely_t)
+                if(ibm_direction(side,t))then
+                    height(side,t)=(hmap(ivelx_l,ively_t)*(ce_xl/dx_hmap)+hmap(ivelx_r,ively_t)*(ce_xr/dx_hmap))*(ce_yt/dy_hmap)+&
+                                   (hmap(ivelx_l,ively_b)*(ce_xl/dx_hmap)+hmap(ivelx_r,ively_b)*(ce_xr/dx_hmap))*(ce_yb/dy_hmap)
+                else
+                    height(side,t)=0._rp
+                endif
+            end do 
+        end do 
+        isInBody_hmap=.false.
+        do t = 1,3
+            if(ibm_direction(0,t))then
+                height(0,t)=l_0(0,t)+height(0,t)
+                if(xyz(t)<=height(0,t))then
+                    isInBody_hmap=.true.
+                endif
+            endif
+            if(ibm_direction(1,t))then
+                height(1,t)=l_0(1,t)-height(1,t)
+                if(xyz(t)>=height(1,t))then
+                    isInBody_hmap=.true.
+                endif
+            endif   
+        end do 
+    end function isInBody_hmap
     ! 1st order IBM 
     ! we change the diL depending the velocity mask we are handling 
     ! e.g. we need to apply 1,0,0 for mask_u and we need to apply 0,1,0 for mask_v 
     ! 0,0,1 for mask_w
-    subroutine set_ibm_staircase(lo,mask_id,dix,diy,diz,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+    subroutine set_ibm_staircase(lo,mask_id,dix,diy,diz,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
         implicit none
         real(rp), intent(in   ), dimension(3)       :: l
         real(rp), intent(in   ), dimension(3)       :: dl
@@ -72,7 +157,10 @@ module mod_ibm
         integer , intent(in), dimension(0:1,3)      :: n_wave
         real(rp), intent(in), dimension(0:1,3)      :: l_0
         real(rp), intent(in), dimension(0:1,3)      :: phase_l
-        print*, "***IBM coefficients are deploying***"
+        real(rp),intent(in),optional                :: hmap(0:,0:)
+        integer,intent(in),optional                 :: nx_hmap,ny_hmap
+
+        print*, "***1stOrder IBM coefficients are deploying***"
         do k = lbound(mask_id,3),ubound(mask_id,3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
                 do i = lbound(mask_id,1),ubound(mask_id,1)
@@ -83,9 +171,15 @@ module mod_ibm
                     x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
                     z = (real(kk,rp) -0.5d0+ real(diz,rp)*0.5d0)*dl(3)
-                    if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
-                        mask_id(i,j,k) = .true.
-                    endif 
+                    if(.not.use_hmap)then
+                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
+                            mask_id(i,j,k) = .true.
+                        endif
+                    else
+                        if(isInBody_hmap(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,hmap,nx_hmap,ny_hmap).eqv..true.)then
+                            mask_id(i,j,k) = .true.
+                        endif
+                    endif
                 end do 
             end do 
         end do

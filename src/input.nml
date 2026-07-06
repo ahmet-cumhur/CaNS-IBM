@@ -45,10 +45,18 @@ io_backend = 'mpiio'
 
 &ibm
 is_ibm = T
-do_richardson = T
 ibm_2nd = T
+
+do_richardson = T
 ibm_direction = F,F, F,F, T,F 
 l_0 = 0.0,0.0, 0.0,0.0, 0.1,0.0
 n_wave = 2,0, 1,0, 0,0
 amp_l = 0.15,0.0, 0.1,0.0, 0.0,0.0 
 phase_l = 0.0,0.0, 0.0,0.0, 0.0,0.0
+/
+
+&hmap
+use_hmap = T
+override_grid = F
+hmap_name = thakkar
+/

@@ -68,13 +68,15 @@ program cans
                                  is_mask_divergence_check, &
                                  is_ibm,           &
                                  ibm_2nd,          &
-                                 use_hmap,         &
                                  do_richardson,    &
                                  ibm_direction,    &
                                  l_0,              &
                                  n_wave,           &
                                  amp_l,            &
-                                 phase_l                 
+                                 phase_l,          &
+                                 use_hmap,         &
+                                 override_grid,     &
+                                 hmap_name          
   use mod_sanity         , only: test_sanity_input,test_sanity_solver
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_solve_helmholtz, only: solve_helmholtz,rhs_bound
@@ -487,15 +489,16 @@ program cans
   if(use_hmap)then
     call read_thakkar_nfo(myid)
     call read_thakkar_bin(myid)
+    print*, "Height Map is on use..." 
   endif
   if(is_ibm)then
     ! we fill the ibm masks here
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
     call set_ibm_staircase(lo,mask_v,0,1,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
   endif
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"

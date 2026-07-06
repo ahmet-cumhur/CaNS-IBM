@@ -79,11 +79,50 @@ module mod_ibm
         rvely_t=ively_t*dy_hmap
         rvely_b=ively_b*dy_hmap
         ively_b = modulo(ively_b,ny_hmap)
-        ively_t = modulo(ively_t,ny_hmap)
-        
-        
+        ively_t = modulo(ively_t,ny_hmap)        
     end subroutine interpolate_hmap
-    logical function isInBody_hmap(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,hmap,nx_hmap,ny_hmap)
+    subroutine get_hmap_loc(n1_hmap,n2_hmap,loc_1,loc_2,&
+                            l1_hmap,l2_hmap,dl_hmap,i1,i2,r1,r2,w1,w2)
+        integer,intent(in)                              :: n1_hmap,n2_hmap
+        real(rp),intent(in)                             :: loc_1,loc_2
+        real(rp), intent(in)                            :: l1_hmap,l2_hmap
+        real(rp),intent(out)                            :: dl_hmap(2)
+        integer,intent(out)                             :: i1(2),i2(2)
+        real(rp),intent(out)                            :: r1(2),r2(2)
+        real(rp),intent(out)                            :: w1(2),w2(2)
+        !     i1(1),i2(2)------------|------------i1(2),i2(2)
+        !          |                                    |
+        !          |        loc_1,loc_2--->hmap_val     |
+        !          |                                    |
+        !     i1(1),i2(1)------------|-------------i1(2),i2(1)
+        i1(:)=0;i2(:)=0;
+        r1(:)=0;r2(:)=0;
+        dl_hmap(:)=0._rp;
+        dl_hmap(1)=l1_hmap/n1_hmap
+        dl_hmap(2)=l2_hmap/n2_hmap
+        
+        i1(1)=floor(real(loc_1/dl_hmap(1),kind=rp))
+        i1(2)=i1(1)+1
+        r1(1)=i1(1)*dl_hmap(1)
+        r1(2)=i1(2)*dl_hmap(1)
+        i1(1)=modulo(i1(1),n1_hmap)
+        i1(2)=modulo(i1(2),n1_hmap)
+
+        i2(1)=floor(real(loc_2/dl_hmap(2),kind=rp))
+        i2(2)=i2(1)+1
+        r2(1)=i2(1)*dl_hmap(2)
+        r2(2)=i2(2)*dl_hmap(2)
+        i2(1)=modulo(i2(1),n2_hmap)
+        i2(2)=modulo(i2(2),n2_hmap)
+
+        w1(1)=abs(loc_1-r1(2))/dl_hmap(1)
+        w1(2)=abs(loc_1-r1(1))/dl_hmap(1)
+        w2(1)=abs(loc_2-r2(2))/dl_hmap(2)
+        w2(2)=abs(loc_2-r2(1))/dl_hmap(2)
+    end subroutine get_hmap_loc
+
+    logical function isInBody_hmap(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
         implicit none
         logical , intent(in), dimension(0:1,3)   :: ibm_direction
         real(rp), intent(in), dimension(0:1,3)   :: amp_l
@@ -98,24 +137,31 @@ module mod_ibm
         integer                                  :: side,t
         real(rp)                                 :: xyz(3)
         integer                                  :: i,ii
-        real(rp),intent(in)                      :: hmap(0:,0:)
-        integer,intent(in)                       :: nx_hmap,ny_hmap
-        integer                                  :: ivelx_l,ivelx_r,ively_t,ively_b
-        real(rp)                                 :: rvelx_l,rvelx_r,rvely_t,rvely_b
-        real(rp)                                 :: ce_xl,ce_xr,ce_yt,ce_yb
-        real(rp)                                 :: dx_hmap,dy_hmap
+        real(rp)                                 :: hmap(0:,0:)
+        real(rp),intent(in),optional             :: l1_hmap,l2_hmap 
+        integer                                  :: n1_hmap,n2_hmap
+        real(rp)                                 :: dl_hmap(2)
+        integer                                  :: i1(2),i2(2)
+        real(rp)                                 :: r1(2),r2(2)
+        real(rp)                                 :: w1(2),w2(2)
         xyz = [x,y,z]
         do side = 0,1
             do t = 1,3
                 i=modulo(t,3)+1
                 ii=modulo(t+1,3)+1
-                call interpolate_hmap(nx_hmap,ny_hmap,x,y,z,l(1),l(2),l(3),dx_hmap,dy_hmap,&
-                                    ivelx_l,ivelx_r,ively_t,ively_b,rvelx_l,rvelx_r,rvely_t,rvely_b)
-                ce_xl=abs(x-rvelx_r);ce_xr=abs(x-rvelx_l)
-                ce_yt=abs(y-rvely_b);ce_yb=abs(y-rvely_t)
                 if(ibm_direction(side,t))then
-                    height(side,t)=(hmap(ivelx_l,ively_t)*(ce_xl/dx_hmap)+hmap(ivelx_r,ively_t)*(ce_xr/dx_hmap))*(ce_yt/dy_hmap)+&
-                                   (hmap(ivelx_l,ively_b)*(ce_xl/dx_hmap)+hmap(ivelx_r,ively_b)*(ce_xr/dx_hmap))*(ce_yb/dy_hmap)
+                    if(override_grid)then
+                        call get_hmap_loc(n1_hmap,n2_hmap,xyz(i),xyz(ii),l(i),l(ii),dl_hmap,i1,i2,r1,r2,w1,w2)
+                        ! Bilinear interpolation 
+                        height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(1))+&
+                                       (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(2))
+                    else
+                        ! here we need to change the shape of the hmap otherwise we will use different sized dl_hmap...
+                        call get_hmap_loc(n1_hmap,n2_hmap,xyz(i),xyz(ii),l1_hmap,l2_hmap,dl_hmap,i1,i2,r1,r2,w1,w2)
+                        ! Bilinear interpolation 
+                        height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(1))+&
+                                       (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(2))
+                    endif
                 else
                     height(side,t)=0._rp
                 endif
@@ -141,7 +187,8 @@ module mod_ibm
     ! we change the diL depending the velocity mask we are handling 
     ! e.g. we need to apply 1,0,0 for mask_u and we need to apply 0,1,0 for mask_v 
     ! 0,0,1 for mask_w
-    subroutine set_ibm_staircase(lo,mask_id,dix,diy,diz,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,nx_hmap,ny_hmap)
+    subroutine set_ibm_staircase(lo,mask_id,dix,diy,diz,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
         implicit none
         real(rp), intent(in   ), dimension(3)       :: l
         real(rp), intent(in   ), dimension(3)       :: dl
@@ -158,7 +205,8 @@ module mod_ibm
         real(rp), intent(in), dimension(0:1,3)      :: l_0
         real(rp), intent(in), dimension(0:1,3)      :: phase_l
         real(rp),intent(in),optional                :: hmap(0:,0:)
-        integer,intent(in),optional                 :: nx_hmap,ny_hmap
+        integer,intent(in),optional                 :: n1_hmap,n2_hmap
+        real(rp),intent(in),optional                :: l1_hmap,l2_hmap
 
         print*, "***1stOrder IBM coefficients are deploying***"
         do k = lbound(mask_id,3),ubound(mask_id,3)
@@ -176,7 +224,8 @@ module mod_ibm
                             mask_id(i,j,k) = .true.
                         endif
                     else
-                        if(isInBody_hmap(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,hmap,nx_hmap,ny_hmap).eqv..true.)then
+                        if(isInBody_hmap(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).eqv..true.)then
                             mask_id(i,j,k) = .true.
                         endif
                     endif

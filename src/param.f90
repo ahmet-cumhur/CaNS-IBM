@@ -111,13 +111,16 @@ logical          , protected :: is_use_compression = .false.
 ! IBM
 logical,protected     :: is_ibm=.false.
 logical,protected     :: do_richardson=.false.
-logical,protected     :: use_hmap=.false. 
 logical,protected     :: ibm_2nd=.false.
 logical, protected    :: ibm_direction(0:1,3)=.false.
 real(rp), protected   :: l_0(0:1,3)=0._rp
 integer, protected    :: n_wave(0:1,3)=0._rp
 real(rp), protected   :: amp_l(0:1,3)=0._rp
 real(rp), protected   :: phase_l(0:1,3)=0._rp
+!hmap
+logical,protected     :: use_hmap=.false.
+logical,protected     :: override_grid=.false.
+character(len=25), protected :: hmap_name="thakkar"
 !
 contains
   subroutine read_input(myid)
@@ -176,13 +179,17 @@ contains
     namelist /ibm/ &
                             is_ibm,           &
                             ibm_2nd,          &
-                            use_hmap,         &
                             do_richardson,    &
                             ibm_direction,    &
                             l_0,              &
                             n_wave,           &
                             amp_l,            &
-                            phase_l                       
+                            phase_l
+    namelist /hmap/ &
+                            use_hmap,         &
+                            override_grid,    &
+                            hmap_name        
+         
 
     !
     ! defaults
@@ -411,6 +418,9 @@ contains
         if(myid == 0) print*, 'Warning: compression is ignored for `io_backend = mpiio`.'
       end if
     rewind(iunit)
+    !
+    ! read "IBM" namelist
+    !
     read(iunit,nml=ibm,iostat=ierr,iomsg=c_iomsg)
       if(ierr /= 0 .and. ierr /= iostat_end) then
         if(myid == 0) print*, 'ERROR: reading `ibm` namelist: ', trim(c_iomsg)
@@ -419,7 +429,17 @@ contains
         close(iunit)
         error stop
       end if
-
+    !
+    ! read hmap namelist
+    !
+    read(iunit,nml=hmap,iostat=ierr,iomsg=c_iomsg)
+      if(ierr /= 0 .and. ierr /= iostat_end) then
+        if(myid == 0) print*, 'ERROR: reading `hmap` namelist: ', trim(c_iomsg)
+        if(myid == 0) print*, 'Aborting...'
+        call MPI_FINALIZE(ierr)
+        close(iunit)
+        error stop
+      end if  
     close(iunit)
   end subroutine read_input
 end module mod_param

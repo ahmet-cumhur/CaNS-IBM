@@ -1,5 +1,5 @@
 &dns
-ng(1:3) = 64, 64, 64
+ng(1:3) = 128, 128, 128
 l(1:3) = 1., 1., 1.
 gtype = 1, gr = 0.
 cfl = 0.1, dtmax = 1.e-4, dt_f = -1.
@@ -45,7 +45,7 @@ io_backend = 'mpiio'
 
 &ibm
 is_ibm = T
-ibm_2nd = F
+ibm_2nd = T
 do_richardson = T
 ibm_direction = F,F, F,F, T,F 
 l_0 = 0.0,0.0, 0.0,0.0, 0.1,0.0
@@ -58,5 +58,5 @@ phase_l = 0.0,0.0, 0.0,0.0, 0.0,0.0
 use_hmap = T
 hmap_mode="fit"
 override_grid = T
-hmap_name = thakkar
+hmap_name = "thakkar"
 /

@@ -150,17 +150,20 @@ module mod_ibm
                 i=modulo(t,3)+1
                 ii=modulo(t+1,3)+1
                 if(ibm_direction(side,t))then
-                    if(override_grid)then
+                    if(trim(hmap_mode)=="fit")then
                         call get_hmap_loc(n1_hmap,n2_hmap,xyz(i),xyz(ii),l(i),l(ii),dl_hmap,i1,i2,r1,r2,w1,w2)
                         ! Bilinear interpolation 
                         height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(1))+&
                                        (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(2))
-                    else
+                    elseif(trim(hmap_mode)=="normal")then
                         ! here we need to change the shape of the hmap otherwise we will use different sized dl_hmap...
                         call get_hmap_loc(n1_hmap,n2_hmap,xyz(i),xyz(ii),l1_hmap,l2_hmap,dl_hmap,i1,i2,r1,r2,w1,w2)
                         ! Bilinear interpolation 
                         height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(1))+&
                                        (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(2))
+                    else
+                        print*,"unknown hmap mode entered..."
+                        stop
                     endif
                 else
                     height(side,t)=0._rp

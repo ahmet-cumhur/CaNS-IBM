@@ -119,6 +119,7 @@ real(rp), protected   :: amp_l(0:1,3)=0._rp
 real(rp), protected   :: phase_l(0:1,3)=0._rp
 !hmap
 logical,protected     :: use_hmap=.false.
+character(len=25), protected :: hmap_mode="fit"
 logical,protected     :: override_grid=.false.
 character(len=25), protected :: hmap_name="thakkar"
 !
@@ -187,6 +188,7 @@ contains
                             phase_l
     namelist /hmap/ &
                             use_hmap,         &
+                            hmap_mode,        &        
                             override_grid,    &
                             hmap_name        
          

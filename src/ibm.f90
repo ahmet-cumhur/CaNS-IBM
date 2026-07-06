@@ -167,7 +167,7 @@ module mod_ibm
     end subroutine set_ibm_staircase
     !2nd order scheme--laplacian settings
     subroutine set_ibm_2nd(lo,mask_id,laplacian_id,dix,diy,diz&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
         implicit none
         logical,intent(inout)                       :: mask_id(0:,0:,0:)
         real(rp), intent(in   ), dimension(3)       :: l
@@ -186,6 +186,9 @@ module mod_ibm
         real(rp), intent(in), dimension(0:1,3)      :: phase_l
         real(rp)                                    :: lambda
         integer                                     :: n_dir
+        real(rp),intent(in),optional                :: hmap(0:,0:)
+        integer,intent(in),optional                 :: n1_hmap,n2_hmap
+        real(rp),intent(in),optional                :: l1_hmap,l2_hmap
         do k = lbound(mask_id,3),ubound(mask_id,3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
                 do i = lbound(mask_id,1),ubound(mask_id,1)
@@ -196,52 +199,59 @@ module mod_ibm
                     x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
                     z = (real(kk,rp) -0.5d0+ real(diz,rp)*0.5d0)*dl(3)
-                    if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l).eqv..true.)then
+                    if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).eqv..true.)then
                         mask_id(i,j,k) = .true.
                     endif 
                     xp=x+dl(1);xm=x-dl(1);yp=y+dl(2);ym=y-dl(2);zp=z+dl(3);zm=z-dl(3)
                     do n_dir=1,6
                         select case(n_dir)
                             case(1)
-                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,&
-                                        l_0,phase_l,xp,y,z,n,l))then
-                                            call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,&
-                                                            amp_l,n_wave,l_0,phase_l,n,l,dl)
+                                ! xp
+                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                            call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                             case(2)
-                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,&
-                                        l_0,phase_l,xm,y,z,n,l))then
-                                            call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,&
-                                                            amp_l,n_wave,l_0,phase_l,n,l,dl)
+                                ! xm
+                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                            call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                             case(3)
-                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,&
-                                        l_0,phase_l,x,yp,z,n,l))then
-                                            call calc_lambda(x,y,z,yp,2,lambda,ibm_direction,&
-                                                            amp_l,n_wave,l_0,phase_l,n,l,dl)
+                                ! yp
+                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                            call calc_lambda(x,y,z,yp,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                             case(4)
-                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,&
-                                        l_0,phase_l,x,ym,z,n,l))then
-                                            call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,&
-                                                            amp_l,n_wave,l_0,phase_l,n,l,dl)
+                                ! ym
+                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                            call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif       
                             case(5)
-                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,&
-                                        l_0,phase_l,x,y,zp,n,l))then
-                                            call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,&
-                                                            amp_l,n_wave,l_0,phase_l,n,l,dl)
+                                ! zp 
+                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                            call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                             case(6)
-                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,&
-                                        l_0,phase_l,x,y,zm,n,l))then
-                                            call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,&
-                                                            amp_l,n_wave,l_0,phase_l,n,l,dl)
+                                ! zm 
+                                if(.not.mask_id(i,j,k).and.isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                            call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                         end select
@@ -251,7 +261,8 @@ module mod_ibm
         end do
     end subroutine set_ibm_2nd
 
-    subroutine calc_lambda(x,y,z,l_n,case_num,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl)
+    subroutine calc_lambda(x,y,z,l_n,case_num,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
         implicit none
         logical , intent(in), dimension(0:1,3)      :: ibm_direction
         real(rp), intent(in), dimension(0:1,3)      :: amp_l
@@ -267,6 +278,9 @@ module mod_ibm
         real(rp)                                    :: l_fluid,l_solid,l_int,l_diff
         real(rp)                                    :: eps
         integer                                     ::  n_iter
+        real(rp),intent(in),optional                :: hmap(0:,0:)
+        integer,intent(in),optional                 :: n1_hmap,n2_hmap
+        real(rp),intent(in),optional                :: l1_hmap,l2_hmap
         lambda=0._rp
         select case(case_num)
             case(1)
@@ -288,24 +302,24 @@ module mod_ibm
             l_int=real((l_solid+l_fluid)/2._rp,kind=rp)
             select case(case_num)
                 case(1)!x
-                    if(isInBody(ibm_direction,amp_l,&
-                    n_wave,l_0,phase_l,l_int,y,z,n,l))then
+                    if(isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                         l_solid=l_int
                     else
                         l_fluid=l_int
                     endif
 
                 case(2)!y
-                    if(isInBody(ibm_direction,amp_l,&
-                    n_wave,l_0,phase_l,x,l_int,z,n,l))then
+                    if(isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                         l_solid=l_int
                     else
                         l_fluid=l_int
                     endif
 
                 case(3)!z
-                    if(isInBody(ibm_direction,amp_l,&
-                    n_wave,l_0,phase_l,x,y,l_int,n,l))then
+                    if(isInBody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                         l_solid=l_int
                     else
                         l_fluid=l_int

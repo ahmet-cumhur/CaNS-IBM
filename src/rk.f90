@@ -680,11 +680,6 @@ module mod_rk
                               ksi_l**2/6._rp+ksi_l**3/24._rp)
           endif
           A_id(i,j,k)=ksi_l+B_id(i,j,k)
-
-          !if (abs(A_id(i,j,k)-1._rp) > 1.e-10_rp.and.cnt<10) then
-          !  cnt=cnt+1
-          !  print *, "A_ nontrivial:", i,j,k, A_id(i,j,k), B_id(i,j,k), laplacian_id(i,j,k)
-          !endif
         end do
       end do
     end do

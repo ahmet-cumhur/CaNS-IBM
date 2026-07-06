@@ -503,11 +503,11 @@ program cans
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
     call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
     call set_ibm_2nd(lo,mask_v,lap_v,0,1,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
   endif
   if(ibm_2nd .and. .not.is_ibm)then
     if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"

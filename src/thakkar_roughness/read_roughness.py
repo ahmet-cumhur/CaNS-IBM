@@ -31,12 +31,12 @@ Ly=np.astype(data_t3.iloc[nmbr-1,2],np.float64)
 Lz=np.astype(data_t3.iloc[nmbr-1,3],np.float64)
 y = Ly*np.arange(data.shape[0])/data.shape[0]
 x = Lx*np.arange(data.shape[1])/data.shape[1]
-
-
+hmap=data-np.min(data) # to shift all data upwards
+hmap_mean=np.mean(hmap)
 # roughness.bin (BINARY) -> the actual data:    x, y, height_map(y,x)    WARNING C/Python-Order of indices used here
 # roughness.nfo (ASCII)  -> length(x), length(y), decription
 with open("roughness.bin",'wb') as f:
-    data.T.tofile(f)
+    hmap.T.tofile(f)
     f.close()
 with open("roughness.nfo","w") as f:
     f.write(f"&roughnessinfo\n")
@@ -48,6 +48,7 @@ with open("roughness.nfo","w") as f:
     f.write(f"nz_tha={nz}\n")
     f.write(f"nx_hmap_tha={nx_d}\n")
     f.write(f"ny_hmap_tha={ny_d}\n")
+    f.write(f"hmap_mean_tha={hmap_mean}\n")
     f.write("/\n")
     f.close()
 

@@ -3,7 +3,7 @@ module mod_thakkar
     use :: mpi
     implicit none
     real(rp),allocatable    :: hmap_tha(:,:)
-    real(rp)                :: lx_tha,ly_tha,lz_tha,dx_tha,dy_tha,dz_tha,dxi_tha,dyi_tha,dzi_tha
+    real(rp)                :: lx_tha,ly_tha,lz_tha,dx_tha,dy_tha,dz_tha,dxi_tha,dyi_tha,dzi_tha,hmap_mean_tha
     integer                 :: nx_tha,ny_tha,nz_tha,nx_hmap_tha,ny_hmap_tha
     contains
     subroutine read_thakkar_bin(myid)
@@ -47,7 +47,8 @@ module mod_thakkar
                             ny_tha,&
                             nz_tha,&
                             nx_hmap_tha,&
-                            ny_hmap_tha
+                            ny_hmap_tha,&
+                            hmap_mean_tha
         path_nfo="../src/thakkar_roughness/roughness.nfo"
         open(newunit=iunit,file=trim(path_nfo),status="old",action="read",&
         iostat=ierr,iomsg=c_iomsg)

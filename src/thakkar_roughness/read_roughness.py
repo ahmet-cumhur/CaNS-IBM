@@ -36,7 +36,7 @@ hmap_mean=np.mean(hmap)
 # roughness.bin (BINARY) -> the actual data:    x, y, height_map(y,x)    WARNING C/Python-Order of indices used here
 # roughness.nfo (ASCII)  -> length(x), length(y), decription
 with open("roughness.bin",'wb') as f:
-    hmap.T.tofile(f)
+    hmap.tofile(f)
     f.close()
 with open("roughness.nfo","w") as f:
     f.write(f"&roughnessinfo\n")

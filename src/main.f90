@@ -493,6 +493,7 @@ program cans
   endif
   if(is_ibm)then
     ! we fill the ibm masks here
+    print*, "***1stOrder IBM coefficients are deploying***"
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
     call set_ibm_staircase(lo,mask_v,0,1,0,n,l,dl,&

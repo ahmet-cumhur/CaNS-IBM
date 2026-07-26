@@ -45,16 +45,16 @@ module mod_ibm
                     ! use hmap                
                     else
                          if(trim(hmap_mode)=="fit")then
-                            call get_hmap_loc(n1_hmap,n2_hmap,xyz(i),xyz(ii),l(i),l(ii),dl_hmap,i1,i2,r1,r2,w1,w2)
+                            call get_hmap_loc(side,n1_hmap,n2_hmap,xyz(i),xyz(ii),l(i),l(ii),dl_hmap,i1,i2,r1,r2,w1,w2)
                             ! Bilinear interpolation 
-                            height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(1))+&
-                                           (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(2))
+                            height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(2))+&
+                                           (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(1))
                         elseif(trim(hmap_mode)=="normal")then
                             ! here we need to change the shape of the hmap otherwise we will use different sized dl_hmap...
-                            call get_hmap_loc(n1_hmap,n2_hmap,xyz(i),xyz(ii),l1_hmap,l2_hmap,dl_hmap,i1,i2,r1,r2,w1,w2)
+                            call get_hmap_loc(side,n1_hmap,n2_hmap,xyz(i),xyz(ii),l1_hmap,l2_hmap,dl_hmap,i1,i2,r1,r2,w1,w2)
                             ! Bilinear interpolation 
-                            height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(1))+&
-                                           (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(2))
+                            height(side,t)=(hmap(i1(1),i2(2))*(w1(1))+hmap(i1(2),i2(2))*(w1(2)))*(w2(2))+&
+                                           (hmap(i1(1),i2(1))*(w1(1))+hmap(i1(2),i2(1))*(w1(2)))*(w2(1))
                         else
                             print*,"unknown hmap mode entered..."
                             stop
@@ -81,37 +81,53 @@ module mod_ibm
             endif   
         end do 
     end function isInbody
-    subroutine get_hmap_loc(n1_hmap,n2_hmap,loc_1,loc_2,&
+    subroutine get_hmap_loc(side,n1_hmap,n2_hmap,loc_1,loc_2,&
                             l1_hmap,l2_hmap,dl_hmap,i1,i2,r1,r2,w1,w2)
         integer,intent(in)                              :: n1_hmap,n2_hmap
-        real(rp),intent(in)                             :: loc_1,loc_2
-        real(rp), intent(in)                            :: l1_hmap,l2_hmap
+        real(rp),intent(inout)                          :: loc_1,loc_2
+        real(rp),intent(in)                             :: l1_hmap,l2_hmap
         real(rp),intent(out)                            :: dl_hmap(2)
         integer,intent(out)                             :: i1(2),i2(2)
         real(rp),intent(out)                            :: r1(2),r2(2)
         real(rp),intent(out)                            :: w1(2),w2(2)
+        integer,intent(in)                              :: side
         !     i1(1),i2(2)------------|------------i1(2),i2(2)
         !          |                                    |
         !          |        loc_1,loc_2--->hmap_val     |
         !          |                                    |
         !     i1(1),i2(1)------------|-------------i1(2),i2(1)
+        ! additionally we need to shift upper wall nx_hmap/2,ny_hmap/2
+        ! so we add a check
         i1(:)=0;i2(:)=0;
         r1(:)=0;r2(:)=0;
         dl_hmap(:)=0._rp;
         dl_hmap(1)=l1_hmap/n1_hmap
         dl_hmap(2)=l2_hmap/n2_hmap
+
+        select case(side)
+            case(0)
+                loc_1=loc_1
+                loc_2=loc_2
+            case(1)
+                loc_1=modulo(loc_1+(0.5*n1_hmap*dl_hmap(1)),(n1_hmap*dl_hmap(1)))
+                loc_2=modulo(loc_2+(0.5*n2_hmap*dl_hmap(2)),(n2_hmap*dl_hmap(2)))
+        end select
         
         i1(1)=floor(real(loc_1/dl_hmap(1),kind=rp))
         i1(2)=i1(1)+1
+
         r1(1)=i1(1)*dl_hmap(1)
         r1(2)=i1(2)*dl_hmap(1)
+
         i1(1)=modulo(i1(1),n1_hmap)
         i1(2)=modulo(i1(2),n1_hmap)
 
         i2(1)=floor(real(loc_2/dl_hmap(2),kind=rp))
         i2(2)=i2(1)+1
+
         r2(1)=i2(1)*dl_hmap(2)
         r2(2)=i2(2)*dl_hmap(2)
+
         i2(1)=modulo(i2(1),n2_hmap)
         i2(2)=modulo(i2(2),n2_hmap)
 
@@ -119,6 +135,7 @@ module mod_ibm
         w1(2)=abs(loc_1-r1(1))/dl_hmap(1)
         w2(1)=abs(loc_2-r2(2))/dl_hmap(2)
         w2(2)=abs(loc_2-r2(1))/dl_hmap(2)
+
     end subroutine get_hmap_loc
 
     ! 1st order IBM 

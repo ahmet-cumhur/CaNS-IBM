@@ -1,12 +1,16 @@
 import numpy as np 
 import os
 import subprocess
-import shutil  
-
+from pathlib import Path
 def reset_case():
-    subprocess.run(["bash","-c","rm -rf /home/cumhur/codes/CaNS-IBM/run/data/*"])
-    shutil.copy2("write_xdmf.py","/home/cumhur/codes/CaNS-IBM/run/data/")
-    subprocess.run(["bash","-c","rm -f /home/cumhur/codes/CaNS-IBM/run/input.nml"])
-    shutil.copy2("input.nml","/home/cumhur/codes/CaNS-IBM/run/") 
+    file_dir=Path(__file__).resolve().parent
+    main_dir=file_dir.parent
+    run_dir=main_dir / "run"
+    data_dir=run_dir / "data" 
+
+    subprocess.run(["bash","-c",f"rm -rf {data_dir}/*"])
+    subprocess.run(["bash","-c",f"cp {file_dir}/write_xdmf.py {data_dir}"])
+    subprocess.run(["bash","-c",f"rm -f {run_dir}/input.nml"])
+    subprocess.run(["bash","-c",f"cp {file_dir}/input.nml {run_dir}"])
 
 reset_case()

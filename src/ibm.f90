@@ -96,7 +96,7 @@ module mod_ibm
         !          |        loc_1,loc_2--->hmap_val     |
         !          |                                    |
         !     i1(1),i2(1)------------|-------------i1(2),i2(1)
-        ! additionally we need to shift upper wall nx_hmap/2,ny_hmap/2
+        ! additionally we need to shift upper wall lx_hmap/2,ly_hmap/2
         ! so we add a check
         i1(:)=0;i2(:)=0;
         r1(:)=0;r2(:)=0;

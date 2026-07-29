@@ -332,38 +332,84 @@ module mod_output
     real(rp), intent(in), dimension(3) :: l,dl
     real(rp), intent(in), dimension(0:) :: z_g
     real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
-    real(rp), allocatable, dimension(:) :: um,vm,wm,u2,v2,w2,uw
+    real(rp), allocatable, dimension(:) :: um,vm,wm,u2,v2,w2,uw,uv,vw
+    real(rp)                            :: um_p,vm_p,wm_p,u2_p,v2_p,w2_p,uw_p,uv_p,vw_p,uf_p,vf_p,wf_p
     integer :: i,j,k
     integer :: iunit
     integer :: q
-    real(rp) :: grid_area_ratio
+    real(rp):: grid_area_ratio
+    integer :: kk 
     !
     q = ng(idir)
     select case(idir)
     case(3)
       grid_area_ratio = dl(1)*dl(2)/(l(1)*l(2))
-      allocate(um(0:q+1),vm(0:q+1),wm(0:q+1),u2(0:q+1),v2(0:q+1),w2(0:q+1),uw(0:q+1))
-      um(:) = 0.
-      vm(:) = 0.
-      wm(:) = 0.
-      u2(:) = 0.
-      v2(:) = 0.
-      w2(:) = 0.
-      uw(:) = 0.
+
+      allocate(um(0:q+1),vm(0:q+1),wm(0:q+1),u2(0:q+1),v2(0:q+1),&
+              w2(0:q+1),uw(0:q+1),uv(0:q+1),vw(0:q+1))
+      
+      !$acc data create(um,vm,wm,u2,v2,w2,uw,uv,vw)
+      !$acc parallel loop default(present)
+      do kk=0,q+1
+        um(kk) = 0.
+        vm(kk) = 0.
+        wm(kk) = 0.
+        u2(kk) = 0.
+        v2(kk) = 0.
+        w2(kk) = 0.
+        uv(kk) = 0.
+        vw(kk) = 0.
+        uw(kk) = 0.
+      end do
+
+      !$acc parallel default(present)
+      !$acc loop gang
       do k=lo(3),hi(3)
+        !
+        um_p = 0.
+        vm_p = 0.
+        wm_p = 0.
+        u2_p = 0.
+        v2_p = 0.
+        w2_p = 0.
+        uv_p = 0.
+        vw_p = 0.
+        uw_p = 0.
+        !
+        !$acc loop vector collapse(2) & 
+        !$acc reduction(+:um_p,vm_p,wm_p,u2_p,v2_p,w2_p,uw_p,uv_p,vw_p)
         do j=lo(2),hi(2)
           do i=lo(1),hi(1)
-            um(k) = um(k) + u(i,j,k)
-            vm(k) = vm(k) + v(i,j,k)
-            wm(k) = wm(k) + 0.50*(w(i,j,k-1) + w(i,j,k))
-            u2(k) = u2(k) + u(i,j,k)**2
-            v2(k) = v2(k) + v(i,j,k)**2
-            w2(k) = w2(k) + 0.50*(w(i,j,k)**2+w(i,j,k-1)**2)
-            uw(k) = uw(k) + 0.25*(u(i-1,j,k) + u(i,j,k))* &
+            um_p = um_p + u(i,j,k)
+            vm_p = vm_p + v(i,j,k)
+            wm_p = wm_p + 0.50*(w(i,j,k-1) + w(i,j,k))
+            u2_p = u2_p + u(i,j,k)**2
+            v2_p = v2_p + v(i,j,k)**2
+            w2_p = w2_p + (0.5*(w(i,j,k-1) + w(i,j,k)))**2
+            uw_p = uw_p + 0.25*(u(i-1,j,k) + u(i,j,k))* &
                                  (w(i,j,k-1) + w(i,j,k))
+            uv_p = uv_p + 0.25*(u(i-1,j,k) + u(i,j,k))* &
+                                 (v(i,j-1,k) + v(i,j,k))
+            vw_p = vw_p + 0.25*(v(i,j-1,k) + v(i,j,k))* &
+                                 (w(i,j,k-1) + w(i,j,k))
+            !
           end do
         end do
+        um(k) = um_p
+        vm(k) = vm_p
+        wm(k) = wm_p
+        u2(k) = u2_p
+        v2(k) = v2_p
+        w2(k) = w2_p
+        uw(k) = uw_p
+        uv(k) = uv_p
+        vw(k) = vw_p
       end do
+      !$acc end parallel
+      !$acc update self(um(0:q+1),vm(0:q+1),wm(0:q+1),          &
+      !$acc             u2(0:q+1),v2(0:q+1),w2(0:q+1),uw(0:q+1),&
+      !$acc             uv(0:q+1),vw(0:q+1))
+      !$acc end data
       call MPI_ALLREDUCE(MPI_IN_PLACE,um(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE,vm(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE,wm(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
@@ -371,19 +417,25 @@ module mod_output
       call MPI_ALLREDUCE(MPI_IN_PLACE,v2(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE,w2(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(MPI_IN_PLACE,uw(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-      um(:) = um(:)*grid_area_ratio
-      vm(:) = vm(:)*grid_area_ratio
-      wm(:) = wm(:)*grid_area_ratio
-      u2(:) = u2(:)*grid_area_ratio - um(:)**2
-      v2(:) = v2(:)*grid_area_ratio - vm(:)**2
-      w2(:) = w2(:)*grid_area_ratio - wm(:)**2
-      uw(:) = uw(:)*grid_area_ratio - um(:)*wm(:)
+      call MPI_ALLREDUCE(MPI_IN_PLACE,uv(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE,vw(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      do kk=0,q+1
+        um(kk) = um(kk)*grid_area_ratio
+        vm(kk) = vm(kk)*grid_area_ratio
+        wm(kk) = wm(kk)*grid_area_ratio
+        u2(kk) = u2(kk)*grid_area_ratio - um(kk)**2
+        v2(kk) = v2(kk)*grid_area_ratio - vm(kk)**2
+        w2(kk) = w2(kk)*grid_area_ratio - wm(kk)**2
+        uw(kk) = uw(kk)*grid_area_ratio - um(kk)*wm(kk)
+        uv(kk) = uv(kk)*grid_area_ratio - um(kk)*vm(kk)
+        vw(kk) = vw(kk)*grid_area_ratio - vm(kk)*wm(kk)
+      end do
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do k=1,ng(3)
           write(iunit,fmt_rp) z_g(k),um(k),vm(k),wm(k), &
                                      u2(k),v2(k),w2(k), &
-                                     uw(k)
+                                     uw(k),uv(k),vw(k)
         end do
         close(iunit)
       end if

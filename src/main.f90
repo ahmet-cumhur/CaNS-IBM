@@ -685,6 +685,11 @@ program cans
       end do
     end if
     write(fldnum,'(i7.7)') istep
+    ! turb_statistics
+    if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
+      call out1d_chan(trim(datadir)//'turb_stats_'//fldnum//'.out',ng,lo,hi,3,l,dl,zc_g,u,v,w)
+    endif
+    !
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
       !$acc wait
       !$acc update self(u,v,w,p)

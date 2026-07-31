@@ -471,20 +471,17 @@ program cans
     allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(A_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(A_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(B_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(B_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(B_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     lap_u=0._rp
     lap_v=0._rp
     lap_w=0._rp
-  else
-    ! only for use_ibm=F
-    allocate(A_u(0:0,0:0,0:0), A_v(0:0,0:0,0:0), A_w(0:0,0:0,0:0))
-    allocate(B_u(0:0,0:0,0:0), B_v(0:0,0:0,0:0), B_w(0:0,0:0,0:0))
   endif
+  !
+  allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(A_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(A_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(B_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(B_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(B_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   A_u=1._rp
   A_v=1._rp
   A_w=1._rp
@@ -493,9 +490,7 @@ program cans
   B_w=1._rp
   !
 #if defined(_OPENACC)
-  if (.not. ibm_2nd) then
-    !$acc enter data copyin(A_u,A_v,A_w,B_u,B_v,B_w)
-  end if
+  !$acc enter data copyin(A_u,A_v,A_w,B_u,B_v,B_w)
 #endif  
   if(use_hmap)then
     call read_thakkar_nfo(myid)
@@ -525,8 +520,6 @@ program cans
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w)
-    !$acc enter data create(A_u,A_v,A_w)
-    !$acc enter data create(B_u,B_v,B_w)
 #endif
   endif
   if(ibm_2nd .and. .not.is_ibm)then

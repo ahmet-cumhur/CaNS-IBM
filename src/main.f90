@@ -466,6 +466,7 @@ program cans
     mask_v = .false.
     mask_w = .false.
   endif
+  !
   if(ibm_2nd)then
     allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
@@ -479,13 +480,23 @@ program cans
     lap_u=0._rp
     lap_v=0._rp
     lap_w=0._rp
-    A_u=1._rp
-    A_v=1._rp
-    A_w=1._rp
-    B_u=1._rp
-    B_v=1._rp
-    B_w=1._rp
+  else
+    ! only for use_ibm=F
+    allocate(A_u(0:0,0:0,0:0), A_v(0:0,0:0,0:0), A_w(0:0,0:0,0:0))
+    allocate(B_u(0:0,0:0,0:0), B_v(0:0,0:0,0:0), B_w(0:0,0:0,0:0))
   endif
+  A_u=1._rp
+  A_v=1._rp
+  A_w=1._rp
+  B_u=1._rp
+  B_v=1._rp
+  B_w=1._rp
+  !
+#if defined(_OPENACC)
+  if (.not. ibm_2nd) then
+    !$acc enter data copyin(A_u,A_v,A_w,B_u,B_v,B_w)
+  end if
+#endif  
   if(use_hmap)then
     call read_thakkar_nfo(myid)
     call read_thakkar_bin(myid)

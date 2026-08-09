@@ -257,6 +257,11 @@ program cans
   allocate(fs(nscal))
   !$acc enter data copyin(scalars(:))
   !
+  if(use_hmap)then
+    call read_thakkar_nfo(myid)
+    call read_thakkar_bin(myid)
+    print*, "Height Map is on use..." 
+  endif
   if(is_debug) then
     if(myid == 0) print*, '*** CaNS build information ***'
     if(myid == 0) print*, 'Compiler version: ', compiler_version()
@@ -492,11 +497,7 @@ program cans
 #if defined(_OPENACC)
   !$acc enter data copyin(A_u,A_v,A_w,B_u,B_v,B_w)
 #endif  
-  if(use_hmap)then
-    call read_thakkar_nfo(myid)
-    call read_thakkar_bin(myid)
-    print*, "Height Map is on use..." 
-  endif
+  
   if(is_ibm)then
     ! we fill the ibm masks here
     print*, "***1stOrder IBM coefficients are deploying***"

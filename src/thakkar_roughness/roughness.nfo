@@ -8,4 +8,6 @@ nz_tha=288
 nx_hmap_tha=1200
 ny_hmap_tha=600
 hmap_mean_tha=0.15898000011525645
+hmap_max_tha=0.26211
+hmap_min_tha=0.0
 /

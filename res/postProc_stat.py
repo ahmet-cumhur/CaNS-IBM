@@ -37,6 +37,8 @@ def up_zp(fturb,hmean,re_tau):
     ax.set_ylabel("u+")
     ax.set_title("u+ over z+")
     ax.legend()
+    fig.tight_layout()
+    fig.savefig("UpZp.png")
     plt.show()
     return
 
@@ -52,6 +54,8 @@ def meanVelocity(fturb,hmean,re_tau):
     ax.set_ylabel("z")
     ax.set_title("Mean Velocity")
     ax.legend()
+    fig.tight_layout()
+    fig.savefig("MeanVelocity.png")
     plt.show()
     return  
 
@@ -75,6 +79,7 @@ def statiscialStationary(fturb):
     ax.legend()
     ax.set_title("Statistical Stationary Map")
     fig.tight_layout()
+    fig.savefig("StatStationary.png")
     plt.show()
     return 
 
@@ -101,6 +106,8 @@ def getWallShearSt(fturb,hmean,re_tau):
     ax.set_xlabel("z/h")
     ax.set_ylabel("Shear St")
     ax.set_title("Shear Stress Distribution")
+    fig.tight_layout()
+    fig.savefig("wallShearSt.png")
     plt.show()
     return
 
@@ -134,6 +141,7 @@ def getReynoldsStComparisson(fturb,hmean,re_tau):
     ax.set_ylabel("Reynolds Stresses and T.K.E \n uiuj/u_tau")
     ax.set_title("Reynolds Stresses over z+")
     fig.tight_layout()
+    fig.savefig("ReStComparison.png")
     plt.show()
     return
 

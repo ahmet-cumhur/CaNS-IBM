@@ -11,7 +11,8 @@ module mod_initgrid
   private
   public initgrid,save_grid
   contains
-  subroutine initgrid(gtype,n,gr,lz,dzc,dzf,zc,zf,is_periodic)
+  subroutine initgrid(gtype,n,gr,lz,dzc,dzf,zc,zf,is_periodic,&
+                      visc,dzp_min_goal,dzp_max_goal,hch,hmax,myid)
     !
     ! initializes the non-uniform grid along z
     !
@@ -19,7 +20,9 @@ module mod_initgrid
     integer, parameter :: CLUSTER_TWO_END   = 1, &
                           CLUSTER_ONE_END   = 2, &
                           CLUSTER_ONE_END_R = 3, &
-                          CLUSTER_MIDDLE    = 4
+                          CLUSTER_MIDDLE    = 4, &
+                          CLUSTER_ROUGH     = 5
+
     integer , intent(in ) :: gtype,n
     real(rp), intent(in ) :: gr,lz
     real(rp), intent(out), dimension(0:n+1) :: dzc,dzf,zc,zf
@@ -27,6 +30,20 @@ module mod_initgrid
     real(rp) :: z0
     integer :: k
     procedure (), pointer :: gridpoint => null()
+    real(rp),intent(in),optional            :: visc,dzp_min_goal,dzp_max_goal
+    real(rp),intent(in),optional            :: hch,hmax
+    real(rp)                                :: re_tau
+    logical                                 :: diagnostics=.true.
+    integer, intent(in),optional            :: myid
+    real(rp)                                :: dzfp,dzcp
+    integer                                 :: iunit
+    character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
+                                   fmt_sp = '(*(es15.8e2,1x))'
+#if !defined(_SINGLE_PRECISION)
+    character(len=*), parameter :: fmt_rp = fmt_dp
+#else
+    character(len=*), parameter :: fmt_rp = fmt_sp
+#endif
     select case(gtype)
     case(CLUSTER_TWO_END)
       gridpoint => gridpoint_cluster_two_end
@@ -39,23 +56,43 @@ module mod_initgrid
     case default
       gridpoint => gridpoint_cluster_two_end
     end select
+    !present check
+    if(gtype==CLUSTER_ROUGH)then
+      if(.not.present(visc).or.&
+         .not.present(dzp_min_goal).or.&
+         .not.present(dzp_max_goal).or.&
+         .not.present(hch).or.&
+         .not.present(hmax))then
+        error stop "Needed rough parameters arent accesible"
+      end if
+    endif
+    if(gtype==CLUSTER_ROUGH.and.diagnostics)then
+      !calc re_tau for diag
+      re_tau=0._rp
+      !we assume u_tau=1.0 after scaling
+      re_tau=hch/visc
+    endif
     !
     ! step 1) determine coordinates of cell faces zf
     !
     zf(0) = 0.
-    if(.not.is_gridpoint_natural_channel) then
+    if(.not.is_gridpoint_natural_channel.and.gtype/=CLUSTER_ROUGH) then
       do k=1,n
         z0  = (k-0.)/(1.*n)
         call gridpoint(gr,z0,zf(k))
       end do
+    elseif(gtype==CLUSTER_ROUGH)then
+      call gridpoint_rough(n,lz,zf,visc,dzp_min_goal,dzp_max_goal,hch,hmax)
     else
       do k=1,n
         call gridpoint_natural(k,n,zf(k))
       end do
     end if
-    zf(1:n) = zf(1:n)*lz
+    if(gtype/=CLUSTER_ROUGH)then
+      zf(1:n) = zf(1:n)*lz
+    endif
     !
-    if(abs(gr) < epsilon(1._rp)) then
+    if(abs(gr) < epsilon(1._rp) .and. gtype/=CLUSTER_ROUGH) then
       !
       ! for uniform grids, set constant spacing to avoid round-off errors
       !
@@ -96,7 +133,105 @@ module mod_initgrid
       zc(k) = zc(k-1) + dzc(k-1)
       zf(k) = zf(k-1) + dzf(k)
     end do
+    !lets get diagnostics 
+    if(diagnostics.eqv..true..and.gtype==CLUSTER_ROUGH.and.myid==0)then
+      open(newunit=iunit,file=trim("grid_diagnostic.out"),&
+          status="replace", action="write")
+      do k=0,n
+        dzfp=dzf(k)*re_tau/hch
+        dzcp=dzc(k)*re_tau/hch
+        write(iunit,fmt_rp) zf(k),zc(k),dzf(k),dzc(k),dzfp,dzcp
+      end do
+      close(iunit)
+    end if
   end subroutine initgrid
+  !IBM aware grid stretching with geometric growth
+  subroutine gridpoint_rough(nz,lz,zf,visc,dzp_min_goal,dzp_max_goal,hch,hmax)
+        implicit none
+        integer, intent(in)                         :: nz
+        real(rp), intent(in)                        :: lz
+        real(rp), intent(out), dimension(0:nz+1)    :: zf
+        integer                                     :: k,j,i
+        real(rp),intent(in)                         :: visc,hch,hmax
+        real(rp),intent(in)                         :: dzp_max_goal,dzp_min_goal
+        real(rp)                                    :: re_tau,u_tau,hmax_p
+        integer                                     :: nz_fine,nz_tra,nz_coarse_it,nz_fine_tra
+        real(rp)                                    :: dz_fine,dzp_coarse_it
+        real(rp)                                    :: gr
+        real(rp)                                    :: lz_fine,lz_tra,lz_coarse_it
+        real(rp)                                    :: err
+        logical                                     :: odd
+        real(rp)                                    :: lzhp,lzh
+        !init
+        lzh=real(lz/2,kind=rp)
+        gr=1.1_rp
+        i=0
+        err=0.0
+        dzp_coarse_it=0.0
+        !lets get the basic number for fine region
+        zf(0) = 0.0
+        !change if needed
+        u_tau=1.0;
+        re_tau=u_tau*hch/visc;
+        dz_fine=dzp_min_goal*hch/re_tau
+        lzhp=lzh*re_tau/hch 
+        !now we need to divide the grid into 2 equal parts
+        if (modulo(nz,2)/=0)then
+            odd=.true.
+        else
+            odd=.false.
+        endif 
+        !fine region
+        hmax_p=(hmax/hch*re_tau)
+        nz_fine=ceiling(hmax_p/dzp_min_goal)
+        lz_fine=real(nz_fine,kind=rp)*dzp_min_goal
+        do k=1,nz_fine
+            zf(k)=zf(k-1)+dz_fine
+        end do
+        !geometric growth region iterative calc.
+        err=(dzp_max_goal-dzp_coarse_it)/dzp_max_goal
+        do while(abs(err)>1e-4)
+            i=i+1
+            gr=gr-0.001*err
+            err=(dzp_max_goal-dzp_coarse_it)/dzp_max_goal
+            !print*,lz_fine,nz_fine
+            nz_tra=floor(log(dzp_max_goal/dzp_min_goal)/log(gr))
+            lz_tra=dzp_min_goal*gr*((gr**nz_tra)-1)/(gr-1)
+            !print*, lz_tra,nz_tra
+            if(odd.eqv..false.)then
+                lz_coarse_it=lzhp-(lz_fine+lz_tra)
+                nz_coarse_it=(nz/2)-(nz_fine+nz_tra)
+                dzp_coarse_it=lz_coarse_it/nz_coarse_it
+            else
+                lz_coarse_it=lzhp-(lz_fine+lz_tra)
+                nz_coarse_it=(nz/2)-(nz_fine+nz_tra)
+                dzp_coarse_it=lz_coarse_it/real(nz_coarse_it+0.5,kind=rp)!this is the half cell since the nz is odd
+            endif
+
+            !print*, lz_coarse_it,nz_coarse_it,dzp_coarse_it
+            !print*, gr
+            !print*, i
+            if(i>1e6)then
+                print*, "gr couldnt be estimated please use other method or different number of cells."
+                exit
+            endif
+        end do 
+        !now we now number of cells that we need to apply
+        nz_fine_tra=nz_fine+nz_tra
+        do k=nz_fine+1,nz_fine_tra
+            j=k-nz_fine
+            zf(k)=zf(k-1)+dz_fine*gr**j
+        end do
+        
+        do k=nz_fine_tra+1,nz/2
+            zf(k)=zf(k-1)+dzp_coarse_it*hch/re_tau
+        end do
+        do k=0,(nz/2)
+            zf(nz-k)=lz-zf(k)
+        end do
+        zf(nz+1)=zf(nz)+(zf(nz-1)-zf(nz-2))
+        !print*,zf
+    end subroutine gridpoint_rough
   !
   ! grid stretching functions
   ! see e.g., Fluid Flow Phenomena -- A Numerical Toolkit, by P. Orlandi

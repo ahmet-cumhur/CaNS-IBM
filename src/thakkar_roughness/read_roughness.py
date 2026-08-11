@@ -35,6 +35,7 @@ hmap=data-np.min(data) # to shift all data upwards
 hmap_mean=np.mean(hmap)
 hmap_max=np.max(hmap)
 hmap_min=np.min(hmap)
+hch=1.0
 # roughness.bin (BINARY) -> the actual data:    x, y, height_map(y,x)    WARNING C/Python-Order of indices used here
 # roughness.nfo (ASCII)  -> length(x), length(y), decription
 with open("roughness.bin",'wb') as f:
@@ -53,6 +54,7 @@ with open("roughness.nfo","w") as f:
     f.write(f"hmap_mean_tha={hmap_mean}\n")
     f.write(f"hmap_max_tha={hmap_max}\n")
     f.write(f"hmap_min_tha={hmap_min}\n")
+    f.write(f"hch={hch}\n")
     f.write("/\n")
     f.close()
 

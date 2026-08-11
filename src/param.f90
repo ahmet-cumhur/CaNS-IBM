@@ -35,6 +35,9 @@ integer , protected :: gtype
 real(rp), protected :: gr
 real(rp), protected :: cfl,dtmax,dt_f
 real(rp), protected :: visci
+!rough input
+real(rp), protected :: dzp_fine
+real(rp), protected :: dzp_coarse
 !
 character(len=100), protected :: inivel
 logical, protected :: is_wallturb
@@ -137,6 +140,7 @@ contains
                   ng, &
                   l, &
                   gtype,gr, &
+                  dzp_fine,dzp_coarse,&
                   cfl,dtmax,dt_f, &
                   visci, &
                   inivel, &

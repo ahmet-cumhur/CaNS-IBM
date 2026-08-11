@@ -47,6 +47,7 @@ program cans
   use mod_output         , only: out0d,gen_alias,out1d,out1d_chan,out2d,out3d,write_log_output,write_visu_2d,write_visu_3d
   use mod_param          , only: ng,l,dl,dli, &
                                  gtype,gr, &
+                                 dzp_fine,dzp_coarse,&
                                  cfl,dtmax,dt_f, &
                                  visc,alpha_max, &
                                  inivel,is_wallturb, &
@@ -278,7 +279,12 @@ program cans
   if(myid == 0) print*, '*** Beginning of simulation ***'
   if(myid == 0) print*, '*******************************'
   if(myid == 0) print*, ''
-  call initgrid(gtype,ng(3),gr,l(3),dzc_g,dzf_g,zc_g,zf_g,cbcpre(0,3)//cbcpre(1,3) == 'PP')
+  if(gtype/=5)then !5 is the rough wall IBM aware cluster two end function 
+    call initgrid(gtype,ng(3),gr,l(3),dzc_g,dzf_g,zc_g,zf_g,cbcpre(0,3)//cbcpre(1,3) == 'PP')
+  else
+    call initgrid(gtype,ng(3),gr,l(3),dzc_g,dzf_g,zc_g,zf_g,cbcpre(0,3)//cbcpre(1,3) == 'PP',&
+                        visc,dzp_fine,dzp_coarse,hch,hmap_max_tha,myid)
+  endif
   do kk=0,ng(1)+1
     xc_g(kk) = (kk-0.5_rp)*dl(1)
     xf_g(kk) = (kk-1.0_rp)*dl(1)

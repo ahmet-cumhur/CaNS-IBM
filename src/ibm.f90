@@ -193,7 +193,7 @@ module mod_ibm
     !2nd order scheme--laplacian settings
     subroutine set_ibm_2nd(lo,mask_id,laplacian_id,dix,diy,diz&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,&
-        zc,zf,dzc,dzf)
+        zc,zf,dzc,dzf,use_hmap)
         implicit none
         logical,intent(in)                          :: mask_id(0:,0:,0:)
         real(rp), intent(in   ), dimension(3)       :: l
@@ -203,7 +203,7 @@ module mod_ibm
         real(rp),intent(inout),dimension(0:,0:,0:)  :: laplacian_id
         integer,intent(in)                          :: dix,diy,diz 
         integer                                     :: i,j,k,ip,im,jp,jm,kp,km
-        integer                                     :: ii,jj,kk
+        integer                                     :: ii,jj,kk,c
         real(rp)                                    :: x,y,z,xp,xm,yp,ym,zp,zm
         logical , intent(in), dimension(0:1,3)      :: ibm_direction
         real(rp), intent(in), dimension(0:1,3)      :: amp_l
@@ -218,6 +218,26 @@ module mod_ibm
         real(rp),intent(in),dimension(0:),optional  :: zc,zf
         real(rp),intent(in),dimension(0:),optional  :: dzc,dzf   
         real(rp)                                    :: dzf_l,dzc_l
+        logical, intent(in)                         :: use_hmap
+        real(rp)                                    :: hmax,hmin
+        real(rp)                                    :: dl_int,l_int
+        integer :: n_hidden,ncand
+        if(use_hmap)then
+            if (.not.present(hmap)) then
+                error stop "use_hmap=T but hmap not present"
+            endif
+            n_hidden=0;
+            ncand=0;
+            dl_int=0._rp;
+            l_int=0._rp;
+            hmax=0._rp;
+            hmin=0._rp;
+            hmin=minval(hmap);
+            hmax=maxval(hmap);
+            !hmax=hmax-hmin;
+        else
+            print*,"some problem between use_hmap and hmap"
+        endif
         do k = 1,n(3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
                 do i = lbound(mask_id,1),ubound(mask_id,1)
@@ -227,6 +247,8 @@ module mod_ibm
                     ! we create the real location of each velocity here
                     x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
+                    ! this part is due to grid stretching
+                    ! and ofc staggered grid 
                     if(diz/=1)then
                         z = zc(k)
                         zp = zc(k+1)
@@ -248,6 +270,26 @@ module mod_ibm
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
+                                !mask_id(i,j,k) already has the velocity body information 
+                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                            xp,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                    ncand=ncand+1
+                                    do c=1,14
+                                        ! we check 4 times since 5th time is on the neigbour which it is in fluid
+                                        dl_int=dl(1)*real(c/15,kind=rp)
+                                        l_int=x+dl_int
+                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                    call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    n_hidden=n_hidden+1
+                                            exit ! we need to exit otherwise we gonna keep adding to laplacian
+                                        endif
+                                    end do
+                                    ! this means we are close to body region and both cells that we check are fluid now
+                                    ! we check if in between part has body!
+                                endif
                             case(2)
                                 ! xm
                                 if(.not.mask_id(i,j,k).and.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,xm,y,z,n,l,&
@@ -255,6 +297,25 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                endif
+                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                            xm,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                    ncand=ncand+1
+                                    do c=1,14
+                                        ! we check 4 times since 5th time is on the neigbour which it is in fluid
+                                        dl_int=dl(1)*real(c/15,kind=rp)
+                                        l_int=x-dl_int
+                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                    call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    n_hidden=n_hidden+1
+                                            exit ! we need to exit otherwise we gonna keep adding to laplacian
+                                        endif
+                                    end do
+                                    ! this means we are close to body region and both cells that we check are fluid now
+                                    ! we check if in between part has body!
                                 endif
                             case(3)
                                 ! yp
@@ -264,6 +325,22 @@ module mod_ibm
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
+                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                            x,yp,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                    ncand=ncand+1
+                                    do c=1,14
+                                        dl_int=dl(2)*real(c/15,kind=rp)
+                                        l_int=y+dl_int
+                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                    call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    n_hidden=n_hidden+1
+                                            exit 
+                                        endif
+                                    end do
+                                endif
                             case(4)
                                 ! ym
                                 if(.not.mask_id(i,j,k).and.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,ym,z,n,l,&
@@ -271,6 +348,22 @@ module mod_ibm
                                             call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                endif
+                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                            x,ym,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                    ncand=ncand+1
+                                    do c=1,14
+                                        dl_int=dl(2)*real(c/15,kind=rp)
+                                        l_int=y-dl_int
+                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                    call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    n_hidden=n_hidden+1
+                                            exit 
+                                        endif
+                                    end do
                                 endif       
                             case(5)
                                 ! zp 
@@ -307,6 +400,8 @@ module mod_ibm
                 end do 
             end do 
         end do
+        print*,hmax,hmin
+        print*, n_hidden,ncand
     end subroutine set_ibm_2nd
 
     subroutine calc_lambda(x,y,z,l_n,case_num,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
@@ -413,7 +508,6 @@ module mod_ibm
                 lambda=real((1._rp/(dzc*dzf))*((dz)/l_diff-1._rp),kind=rp)
         end select  
     end subroutine calc_lambda
-
     subroutine apply_ibm_staircase(field,mask_id,dt)
         implicit none
         real(rp),intent(inout),dimension(0:,0:,0:)  :: field

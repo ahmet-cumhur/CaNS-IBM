@@ -508,11 +508,11 @@ program cans
     ! we fill the ibm masks here
     print*, "***1stOrder IBM coefficients are deploying***"
     call set_ibm_staircase(lo,mask_u,1,0,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
     call set_ibm_staircase(lo,mask_v,0,1,0,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
-    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
 #if defined (_OPENACC)
     !$acc enter data copyin(mask_u,mask_v,mask_w)
 #endif
@@ -520,11 +520,11 @@ program cans
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
     call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf)
     call set_ibm_2nd(lo,mask_v,lap_v,0,1,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf)
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w)
 #endif

@@ -143,7 +143,7 @@ module mod_ibm
     ! e.g. we need to apply 1,0,0 for mask_u and we need to apply 0,1,0 for mask_v 
     ! 0,0,1 for mask_w
     subroutine set_ibm_staircase(lo,mask_id,dix,diy,diz,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,&
-                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,zc,zf)
         implicit none
         real(rp), intent(in   ), dimension(3)       :: l
         real(rp), intent(in   ), dimension(3)       :: dl
@@ -162,6 +162,7 @@ module mod_ibm
         real(rp),intent(in),optional                :: hmap(0:,0:)
         integer,intent(in),optional                 :: n1_hmap,n2_hmap
         real(rp),intent(in),optional                :: l1_hmap,l2_hmap
+        real(rp),intent(in),dimension(:),optional   :: zc,zf             
 
         do k = lbound(mask_id,3),ubound(mask_id,3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
@@ -172,7 +173,15 @@ module mod_ibm
                     ! we create the real location of each velocity here
                     x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
-                    z = (real(kk,rp) -0.5d0+ real(diz,rp)*0.5d0)*dl(3)
+                    if(diz/=1)then
+                    ! this means we are looking for either u or v so their location is at z center
+                    ! we gonna use the senter of zc
+                        z = zc(k)
+                        ! we use k inestead of kk since kk is the global and k is the local array index
+                    else
+                    ! else than we are looking for the w which is located on the z face
+                        z = zf(k)
+                    endif
                     if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).eqv..true.)then
                         mask_id(i,j,k) = .true.
@@ -183,7 +192,8 @@ module mod_ibm
     end subroutine set_ibm_staircase
     !2nd order scheme--laplacian settings
     subroutine set_ibm_2nd(lo,mask_id,laplacian_id,dix,diy,diz&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,&
+        zc,zf,dzc,dzf)
         implicit none
         logical,intent(in)                          :: mask_id(0:,0:,0:)
         real(rp), intent(in   ), dimension(3)       :: l
@@ -205,7 +215,10 @@ module mod_ibm
         real(rp),intent(in),optional                :: hmap(0:,0:)
         integer,intent(in),optional                 :: n1_hmap,n2_hmap
         real(rp),intent(in),optional                :: l1_hmap,l2_hmap
-        do k = lbound(mask_id,3),ubound(mask_id,3)
+        real(rp),intent(in),dimension(0:),optional  :: zc,zf
+        real(rp),intent(in),dimension(0:),optional  :: dzc,dzf   
+        real(rp)                                    :: dzf_l,dzc_l
+        do k = 1,n(3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
                 do i = lbound(mask_id,1),ubound(mask_id,1)
                     ii = lo(1)+i-1
@@ -214,8 +227,17 @@ module mod_ibm
                     ! we create the real location of each velocity here
                     x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
                     y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
-                    z = (real(kk,rp) -0.5d0+ real(diz,rp)*0.5d0)*dl(3)
-                    xp=x+dl(1);xm=x-dl(1);yp=y+dl(2);ym=y-dl(2);zp=z+dl(3);zm=z-dl(3)
+                    if(diz/=1)then
+                        z = zc(k)
+                        zp = zc(k+1)
+                        zm = zc(k-1)
+                    else
+                        z = zf(k)
+                        zp = zf(k+1)
+                        zm = zf(k-1)
+                    endif
+                    dzf_l=0._rp;dzc_l=0._rp
+                    xp=x+dl(1);xm=x-dl(1);yp=y+dl(2);ym=y-dl(2);
                     do n_dir=1,6
                         select case(n_dir)
                             case(1)
@@ -252,18 +274,32 @@ module mod_ibm
                                 endif       
                             case(5)
                                 ! zp 
+                                if(diz==0)then
+                                    dzc_l=dzc(k)
+                                    dzf_l=dzf(k)
+                                else
+                                    dzf_l=dzf(k+1)
+                                    dzc_l=dzc(k)
+                                endif
                                 if(.not.mask_id(i,j,k).and.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,zp,n,l,&
                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                                             call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                             case(6)
-                                ! zm 
+                                ! zm
+                                if(diz==0)then
+                                    dzc_l=dzc(k-1)
+                                    dzf_l=dzf(k)
+                                else
+                                    dzf_l=dzf(k)
+                                    dzc_l=dzc(k)
+                                endif 
                                 if(.not.mask_id(i,j,k).and.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,zm,n,l,&
                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                                             call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                 endif
                         end select
@@ -274,7 +310,7 @@ module mod_ibm
     end subroutine set_ibm_2nd
 
     subroutine calc_lambda(x,y,z,l_n,case_num,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
-                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc,diz)
         implicit none
         logical , intent(in), dimension(0:1,3)      :: ibm_direction
         real(rp), intent(in), dimension(0:1,3)      :: amp_l
@@ -293,14 +329,29 @@ module mod_ibm
         real(rp),intent(in),optional                :: hmap(0:,0:)
         integer,intent(in),optional                 :: n1_hmap,n2_hmap
         real(rp),intent(in),optional                :: l1_hmap,l2_hmap
+        real(rp),intent(in),optional                :: dzf,dzc
+        integer,intent(in),optional                 :: diz   
+        real(rp)                                    :: dz
         lambda=0._rp
+        dz=0._rp
+        if(case_num==3)then
+            if(diz==0)then
+                ! this means we are looking for u or v
+                ! their location is at zc 
+                dz=dzc
+            else
+                ! this means we are looking for w
+                ! its location is at zf 
+                dz=dzf
+            endif
+        endif
         select case(case_num)
             case(1)
                 eps = 1.e-10_rp*dl(1)
             case(2)
                 eps = 1.e-10_rp*dl(2)
             case(3)
-                eps = 1.e-10_rp*dl(3)
+                eps = 1.e-10_rp*dz
         end select
         select case(case_num)
             case(1)
@@ -350,12 +401,16 @@ module mod_ibm
             l_diff=eps
         endif
         select case(case_num)
+            
             case(1)
                 lambda=real((1._rp/dl(1)**2)*(dl(1)/l_diff-1._rp),kind=rp)
             case(2)
                 lambda=real((1._rp/dl(2)**2)*(dl(2)/l_diff-1._rp),kind=rp)
             case(3)
-                lambda=real((1._rp/dl(3)**2)*(dl(3)/l_diff-1._rp),kind=rp)
+                ! imporant note here  we need both dzc and
+                ! dzf since their gradinet either at cell center or face or vice versa
+                !                      !
+                lambda=real((1._rp/(dzc*dzf))*((dz)/l_diff-1._rp),kind=rp)
         end select  
     end subroutine calc_lambda
 

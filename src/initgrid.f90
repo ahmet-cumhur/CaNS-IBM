@@ -21,7 +21,8 @@ module mod_initgrid
                           CLUSTER_ONE_END   = 2, &
                           CLUSTER_ONE_END_R = 3, &
                           CLUSTER_MIDDLE    = 4, &
-                          CLUSTER_ROUGH     = 5
+                          CLUSTER_ROUGH     = 5, &
+                          CLUSTER_ROUGH_TAN = 6
 
     integer , intent(in ) :: gtype,n
     real(rp), intent(in ) :: gr,lz

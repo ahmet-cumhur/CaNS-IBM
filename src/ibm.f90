@@ -221,7 +221,7 @@ module mod_ibm
         logical, intent(in)                         :: use_hmap
         real(rp)                                    :: hmax,hmin
         real(rp)                                    :: dl_int,l_int
-        integer :: n_hidden,ncand
+        integer                                     :: n_hidden,ncand
         if(use_hmap)then
             if (.not.present(hmap)) then
                 error stop "use_hmap=T but hmap not present"
@@ -276,13 +276,13 @@ module mod_ibm
                                     ncand=ncand+1
                                     do c=1,14
                                         ! we check 4 times since 5th time is on the neigbour which it is in fluid
-                                        dl_int=dl(1)*real(c/15,kind=rp)
+                                        dl_int=dl(1)*real(c,kind=rp)/15
                                         l_int=x+dl_int
                                         if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
                                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    !call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                                     n_hidden=n_hidden+1
                                             exit ! we need to exit otherwise we gonna keep adding to laplacian
                                         endif
@@ -303,13 +303,13 @@ module mod_ibm
                                     ncand=ncand+1
                                     do c=1,14
                                         ! we check 4 times since 5th time is on the neigbour which it is in fluid
-                                        dl_int=dl(1)*real(c/15,kind=rp)
+                                        dl_int=dl(1)*real(c,kind=rp)/15
                                         l_int=x-dl_int
                                         if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
                                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    !call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                                     n_hidden=n_hidden+1
                                             exit ! we need to exit otherwise we gonna keep adding to laplacian
                                         endif
@@ -329,13 +329,13 @@ module mod_ibm
                                                                             x,yp,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                                     ncand=ncand+1
                                     do c=1,14
-                                        dl_int=dl(2)*real(c/15,kind=rp)
+                                        dl_int=dl(2)*real(c,kind=rp)/15
                                         l_int=y+dl_int
                                         if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
                                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    !call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                                     n_hidden=n_hidden+1
                                             exit 
                                         endif
@@ -353,13 +353,13 @@ module mod_ibm
                                                                             x,ym,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
                                     ncand=ncand+1
                                     do c=1,14
-                                        dl_int=dl(2)*real(c/15,kind=rp)
+                                        dl_int=dl(2)*real(c,kind=rp)/15
                                         l_int=y-dl_int
                                         if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
                                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                            phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                    !call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
                                                     n_hidden=n_hidden+1
                                             exit 
                                         endif

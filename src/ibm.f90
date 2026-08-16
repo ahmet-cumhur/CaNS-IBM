@@ -162,7 +162,7 @@ module mod_ibm
         real(rp),intent(in),optional                :: hmap(0:,0:)
         integer,intent(in),optional                 :: n1_hmap,n2_hmap
         real(rp),intent(in),optional                :: l1_hmap,l2_hmap
-        real(rp),intent(in),dimension(:),optional   :: zc,zf             
+        real(rp),intent(in),dimension(0:),optional  :: zc,zf           
 
         do k = lbound(mask_id,3),ubound(mask_id,3)
             do j = lbound(mask_id,2),ubound(mask_id,2)

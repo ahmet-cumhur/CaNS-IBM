@@ -237,6 +237,14 @@ module mod_ibm
             !hmax=hmax-hmin;
         else
             print*,"some problem between use_hmap and hmap"
+            n_hidden=0;
+            ncand=0;
+            dl_int=0._rp;
+            l_int=0._rp;
+            hmax=0._rp;
+            hmin=0._rp;
+            hmin=minval(hmap);
+            hmax=maxval(hmap);
         endif
         do k = 1,n(3)
             do j = lbound(mask_id,2),ubound(mask_id,2)

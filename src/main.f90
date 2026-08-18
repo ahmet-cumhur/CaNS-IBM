@@ -178,6 +178,10 @@ program cans
   real(rp),allocatable  :: B_w(:,:,:)
 
   real(rp)              :: mean_u,mean_v,mean_w
+
+  logical,allocatable   :: band_u(:,:,:)
+  logical,allocatable   :: band_v(:,:,:)
+  logical,allocatable   :: band_w(:,:,:)
 !*******HMAP********!
 !******************!
   !
@@ -485,6 +489,12 @@ program cans
     lap_u=0._rp
     lap_v=0._rp
     lap_w=0._rp
+    allocate(band_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(band_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(band_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    band_u=.false.
+    band_v=.false.
+    band_w=.false.
   endif
   !
   allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
@@ -520,11 +530,17 @@ program cans
   if(is_ibm.and.ibm_2nd)then
     print*, "***2nd Order IBM coefficients are deploying***"
     call set_ibm_2nd(lo,mask_u,lap_u,1,0,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_u)
     call set_ibm_2nd(lo,mask_v,lap_v,0,1,0&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_v)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
-        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap)
+        ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_w)
+    call calc_fric(lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                band_u,visc,u,1,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+    call calc_fric(lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                band_v,visc,v,0,1,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+    call calc_fric(lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                band_w,visc,w,0,0,1,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w)
 #endif

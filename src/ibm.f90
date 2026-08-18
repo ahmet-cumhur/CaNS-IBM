@@ -184,7 +184,7 @@ module mod_ibm
                     endif
                     if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
                                 hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).eqv..true.)then
-                        mask_id(i,j,k) = .true.
+                        mask_id(i,j,k) = .true. ! this means we are in the solid
                     endif                    
                 end do 
             end do 
@@ -193,7 +193,7 @@ module mod_ibm
     !2nd order scheme--laplacian settings
     subroutine set_ibm_2nd(lo,mask_id,laplacian_id,dix,diy,diz&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,&
-        zc,zf,dzc,dzf,use_hmap)
+        zc,zf,dzc,dzf,use_hmap,band_id)
         implicit none
         logical,intent(in)                          :: mask_id(0:,0:,0:)
         real(rp), intent(in   ), dimension(3)       :: l
@@ -222,6 +222,11 @@ module mod_ibm
         real(rp)                                    :: hmax,hmin
         real(rp)                                    :: dl_int,l_int
         integer                                     :: n_hidden,ncand
+        logical                                     :: calc_inBetween
+        logical                                     :: ibm_diagnostic
+        logical,dimension(0:,0:,0:),intent(inout)   :: band_id
+        calc_inBetween=.false.
+        ibm_diagnostic=.false.
         if(use_hmap)then
             if (.not.present(hmap)) then
                 error stop "use_hmap=T but hmap not present"
@@ -236,15 +241,13 @@ module mod_ibm
             hmax=maxval(hmap);
             !hmax=hmax-hmin;
         else
-            print*,"some problem between use_hmap and hmap"
+            print*,"some problem between use_hmap and hmap"! doesnt mean problem
             n_hidden=0;
             ncand=0;
             dl_int=0._rp;
             l_int=0._rp;
             hmax=0._rp;
             hmin=0._rp;
-            hmin=minval(hmap);
-            hmax=maxval(hmap);
         endif
         do k = 1,n(3)
             do j = lbound(mask_id,2),ubound(mask_id,2)
@@ -257,6 +260,8 @@ module mod_ibm
                     y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
                     ! this part is due to grid stretching
                     ! and ofc staggered grid 
+                    ! diz indicates if we are looking for w cells if we dont they are in the center
+                    ! if we look into w cells they are in the face
                     if(diz/=1)then
                         z = zc(k)
                         zp = zc(k+1)
@@ -277,26 +282,30 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                            band_id(i,j,k) = .true. ! this means on band and fluid
                                 endif
-                                !mask_id(i,j,k) already has the velocity body information 
-                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
-                                                                            xp,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                    ncand=ncand+1
-                                    do c=1,14
-                                        ! we check 4 times since 5th time is on the neigbour which it is in fluid
-                                        dl_int=dl(1)*real(c,kind=rp)/15
-                                        l_int=x+dl_int
-                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
-                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    !call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                                    n_hidden=n_hidden+1
-                                            exit ! we need to exit otherwise we gonna keep adding to laplacian
-                                        endif
-                                    end do
+                                !mask_id(i,j,k) already has the velocity body information
+                                if(calc_inBetween)then 
                                     ! this means we are close to body region and both cells that we check are fluid now
                                     ! we check if in between part has body!
+                                    if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                                xp,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                        ncand=ncand+1
+                                        do c=1,14
+                                            ! we check 15 times
+                                            dl_int=dl(1)*real(c,kind=rp)/15
+                                            l_int=x+dl_int
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
+                                                    hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                        !call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                        !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                        !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                        n_hidden=n_hidden+1
+                                                exit ! we need to exit otherwise we gonna keep adding to laplacian !note#2 not sure what should be done
+                                            endif
+                                        end do
+                                        
+                                    endif
                                 endif
                             case(2)
                                 ! xm
@@ -305,25 +314,26 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
-                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
-                                                                            xm,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                    ncand=ncand+1
-                                    do c=1,14
-                                        ! we check 4 times since 5th time is on the neigbour which it is in fluid
-                                        dl_int=dl(1)*real(c,kind=rp)/15
-                                        l_int=x-dl_int
-                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
-                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    !call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                                    n_hidden=n_hidden+1
-                                            exit ! we need to exit otherwise we gonna keep adding to laplacian
-                                        endif
-                                    end do
-                                    ! this means we are close to body region and both cells that we check are fluid now
-                                    ! we check if in between part has body!
+                                if(calc_inBetween)then 
+                                    if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                                xm,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                        ncand=ncand+1
+                                        do c=1,14
+                                            ! we check 4 times since 5th time is on the neigbour which it is in fluid
+                                            dl_int=dl(1)*real(c,kind=rp)/15
+                                            l_int=x-dl_int
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,l_int,y,z,n,l,&
+                                                    hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                        !call calc_lambda(x,y,z,l_int,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                        !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                        !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                        n_hidden=n_hidden+1
+                                                exit 
+                                            endif
+                                        end do
+                                    endif
                                 endif
                             case(3)
                                 ! yp
@@ -332,22 +342,25 @@ module mod_ibm
                                             call calc_lambda(x,y,z,yp,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
-                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
-                                                                            x,yp,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                    ncand=ncand+1
-                                    do c=1,14
-                                        dl_int=dl(2)*real(c,kind=rp)/15
-                                        l_int=y+dl_int
-                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
-                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    !call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                                    n_hidden=n_hidden+1
-                                            exit 
-                                        endif
-                                    end do
+                                if(calc_inBetween)then 
+                                    if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                                x,yp,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                        ncand=ncand+1
+                                        do c=1,14
+                                            dl_int=dl(2)*real(c,kind=rp)/15
+                                            l_int=y+dl_int
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
+                                                    hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                        !call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                        !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                        !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                        n_hidden=n_hidden+1
+                                                exit 
+                                            endif
+                                        end do
+                                    endif
                                 endif
                             case(4)
                                 ! ym
@@ -356,22 +369,25 @@ module mod_ibm
                                             call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
-                                if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
-                                                                            x,ym,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                    ncand=ncand+1
-                                    do c=1,14
-                                        dl_int=dl(2)*real(c,kind=rp)/15
-                                        l_int=y-dl_int
-                                        if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
-                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                                    !call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
-                                                    !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
-                                                    !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                                    n_hidden=n_hidden+1
-                                            exit 
-                                        endif
-                                    end do
+                                if(calc_inBetween)then 
+                                    if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                                                                                x,ym,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                        ncand=ncand+1
+                                        do c=1,14
+                                            dl_int=dl(2)*real(c,kind=rp)/15
+                                            l_int=y-dl_int
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,l_int,z,n,l,&
+                                                    hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                                        !call calc_lambda(x,y,z,l_int,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
+                                                        !        phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
+                                                        !laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                                        n_hidden=n_hidden+1
+                                                exit 
+                                            endif
+                                        end do
+                                    endif
                                 endif       
                             case(5)
                                 ! zp 
@@ -387,6 +403,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                             case(6)
                                 ! zm
@@ -402,18 +419,36 @@ module mod_ibm
                                             call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                         end select
                     end do
                 end do 
             end do 
         end do
-        print*,hmax,hmin
-        print*, n_hidden,ncand
+        if(ibm_diagnostic)then
+            c=0
+            print*,"max height of the hmap: ",hmax,hmin
+            print*, "possible problematic locations: ",n_hidden,ncand
+            print*, "number of band locations: ",count(band_id)
+            print*, "number of IBM locations: ",count(mask_id)
+            do k=1,n(3)
+                do j=1,n(2)
+                    do i=1,n(1)
+                        if(band_id(i,j,k).and.mask_id(i,j,k))then
+                            print*,"some problems with ibm processing"
+                            print*,"some points are in the band and solid mask"
+                            c=c+1
+                        endif
+                    enddo
+                enddo
+            enddo
+            print*,"overlapping cells: ", c
+        endif
     end subroutine set_ibm_2nd
 
     subroutine calc_lambda(x,y,z,l_n,case_num,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
-                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc,diz)
+                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc,diz,wall_loc)
         implicit none
         logical , intent(in), dimension(0:1,3)      :: ibm_direction
         real(rp), intent(in), dimension(0:1,3)      :: amp_l
@@ -435,6 +470,7 @@ module mod_ibm
         real(rp),intent(in),optional                :: dzf,dzc
         integer,intent(in),optional                 :: diz   
         real(rp)                                    :: dz
+        real(rp),intent(out),optional,dimension(3)  :: wall_loc
         lambda=0._rp
         dz=0._rp
         if(case_num==3)then
@@ -514,8 +550,343 @@ module mod_ibm
                 ! dzf since their gradinet either at cell center or face or vice versa
                 !                      !
                 lambda=real((1._rp/(dzc*dzf))*((dz)/l_diff-1._rp),kind=rp)
-        end select  
+        end select 
+        ! return the wall location
+        if(present(wall_loc))then
+            select case(case_num)
+            case(1)
+                wall_loc=[l_int,y,z]
+            case(2)
+                wall_loc=[x,l_int,z]
+            case(3)
+                wall_loc=[x,y,l_int]
+            end select
+        endif 
     end subroutine calc_lambda
+    subroutine calc_fric(lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                band_id,visc,vel_id,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
+        ! routine creates the tangent and normal plane for 3D IBM
+        real(rp), dimension(0:,0:,0:), intent(in   )            :: vel_id
+        real(rp), intent(in)                                    :: visc                        
+        logical , intent(in), dimension(0:1,3)                  :: ibm_direction
+        real(rp), intent(in), dimension(0:1,3)                  :: amp_l
+        integer , intent(in), dimension(0:1,3)                  :: n_wave
+        real(rp), intent(in), dimension(0:1,3)                  :: l_0
+        real(rp), intent(in), dimension(0:1,3)                  :: phase_l
+        real(rp), intent(in   ), dimension(3)                   :: l
+        integer , intent(in   ), dimension(3)                   :: n
+        real(rp),intent(in),optional                            :: hmap(0:,0:)
+        integer,intent(in),optional                             :: n1_hmap,n2_hmap
+        real(rp),intent(in),optional                            :: l1_hmap,l2_hmap
+        real(rp),intent(in),dimension(0:),optional              :: dzf,dzc
+
+        logical, intent(in), dimension(0:,0:,0:)                :: band_id
+        integer,intent(in)                                      :: dix,diy,diz
+        integer                                                 :: i,j,k,c,wc,nc
+        real(rp),dimension(0:2,6,0:26)                          :: wall_loc
+        logical,dimension(6,0:26)                               :: wall_loc_log
+        integer,intent(in),dimension(3)                         :: lo
+        real(rp),intent(in),dimension(0:)                       :: zc,zf
+        real(rp), intent(in),dimension(3)                       :: dl
+        real(rp)                                                :: x,y,z
+        real(rp)                                                :: xp,xm,yp,ym,zp,zm
+        real(rp)                                                :: lambda!just to fullfill the calc_lamda
+        integer                                                 :: di,dj,dk,in,jn,kn
+        real(rp),dimension(3)                                   :: wall_loc_real
+        real(rp)                                                :: dzf_l,dzc_l
+        real(rp),dimension(3,2)                                 :: plane
+        real(rp),dimension(3)                                   :: nv,cp,bp
+        real(rp)                                                :: angle_plane,out_plane,grad
+        real(rp)                                                :: shear_st
+        angle_plane=0._rp;out_plane=0._rp;grad=0._rp
+        wall_loc_log(:,:)=.false.
+        wall_loc_real(:)=0._rp
+        wall_loc(:,:,:)=0._rp
+        x=0._rp;y=0._rp;z=0._rp;
+        dzc_l=0._rp;dzf_l=0._rp
+        xp=0._rp;xm=0._rp;yp=0._rp;ym=0._rp;zp=0._rp;zm=0._rp
+        do k=(lbound(band_id,3)+1),(ubound(band_id,3)-1)
+            do j=(lbound(band_id,2)+1),(ubound(band_id,2)-1)
+                do i=(lbound(band_id,1)+1),(ubound(band_id,1)-1)
+                    if(band_id(i,j,k))then ! this means we are in band
+                        wall_loc(:,:,:)=0._rp
+                        wall_loc_log(:,:)=.false.
+                        wc=0
+                       
+                        do nc=0,26 ! time to check all possible near cells
+                            
+                            di=modulo(nc,3)-1
+                            dj=modulo(nc/3,3)-1
+                            dk=modulo(nc/9,3)-1
+                            in=i+di;jn=j+dj;kn=k+dk;
+                            if(band_id(in,jn,kn))then
+                                xp=0._rp;xm=0._rp;yp=0._rp;ym=0._rp;zp=0._rp;zm=0._rp
+                                call get_grid_loc(lo,in,jn,kn,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm) 
+                                do c=1,6    
+                                    select case(c)
+                                        case(1)!xp
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,xp,y,z,n,l,&
+                                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then 
+
+                                                call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz,wall_loc_real)
+                                                wc=wc+1 !wc describes the wall counter
+                                                wall_loc(:,c,nc)=wall_loc_real
+                                                wall_loc_log(c,nc)=.true.
+                                                wall_loc_real(:)=0._rp
+
+                                            endif   
+                                        case(2)!i-1
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,xm,y,z,n,l,&
+                                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then 
+
+                                                call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz,wall_loc_real)
+                                                wc=wc+1 !wc describes the wall counter
+                                                wall_loc(:,c,nc)=wall_loc_real
+                                                wall_loc_log(c,nc)=.true.
+                                                wall_loc_real(:)=0._rp
+
+                                            endif   
+                                        case(3)!j+1
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,yp,z,n,l,&
+                                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then 
+                                            
+                                                call calc_lambda(x,y,z,yp,2,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz,wall_loc_real)
+                                                wc=wc+1 !wc describes the wall counter
+                                                wall_loc(:,c,nc)=wall_loc_real
+                                                wall_loc_log(c,nc)=.true.
+                                                wall_loc_real(:)=0._rp
+
+                                            endif    
+                                        case(4)!j-1
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,ym,z,n,l,&
+                                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then 
+                                                call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz,wall_loc_real)
+                                                wc=wc+1 !wc describes the wall counter
+                                                wall_loc(:,c,nc)=wall_loc_real
+                                                wall_loc_log(c,nc)=.true.
+                                                wall_loc_real(:)=0._rp
+                                            end if    
+                                        case(5)!k+1
+                                            if(diz==0)then
+                                                dzc_l=dzc(kn)
+                                                dzf_l=dzf(kn)
+                                            else
+                                                dzf_l=dzf(kn+1)
+                                                dzc_l=dzc(kn)
+                                            endif
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,zp,n,l,&
+                                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then 
+                                                call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz,wall_loc_real)
+                                                wc=wc+1 !wc describes the wall counter
+                                                wall_loc(:,c,nc)=wall_loc_real
+                                                wall_loc_log(c,nc)=.true.
+                                                wall_loc_real(:)=0._rp 
+                                            endif  
+                                        case(6)!k-1
+                                            if(diz==0)then
+                                                dzc_l=dzc(kn-1)
+                                                dzf_l=dzf(kn)
+                                            else
+                                                dzf_l=dzf(kn)
+                                                dzc_l=dzc(kn)
+                                            endif
+                                            if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,zm,n,l,&
+                                            hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then 
+                                                call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,&
+                                                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz,wall_loc_real)
+                                                wc=wc+1 !wc describes the wall counter
+                                                wall_loc(:,c,nc)=wall_loc_real
+                                                wall_loc_log(c,nc)=.true.
+                                                wall_loc_real(:)=0._rp
+                                            endif
+                                        case default
+                                            print*,"something is off.... at ibm.f90"   
+                                    end select
+                                end do
+                            endif
+                        end do
+                        if(wc<=3)cycle
+                        call get_plane(wall_loc,wall_loc_log,plane)
+                        !now we have the normal and center now lets get the distance
+                        !lets get the location of the band point
+                        x=0._rp;y=0._rp;z=0._rp;xp=0._rp;xm=0._rp;yp=0._rp;ym=0._rp;zp=0._rp;zm=0._rp
+                        call get_grid_loc(lo,i,j,k,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
+                        !output of these are the location of the bandpoint
+                        bp(1)=x;bp(2)=y;bp(3)=z;
+                        cp(1)=bp(1)-plane(1,1);
+                        cp(2)=bp(2)-plane(2,1);
+                        cp(3)=bp(3)-plane(3,1);
+                        !now we have exact distance from the center point of the plane
+                        !to the band point! lets get them scalar product
+                        nv=plane(:,2)
+                        call comp_sca(nv,cp,angle_plane,out_plane)
+                        call comp_grad(out_plane,vel_id(i,j,k),grad)
+                        !now  we have the gradient basic after this!
+                        !mult. with viscosity to get the shear stress.
+                        shear_st=visc*grad 
+                        print*,(90._rp-angle_plane),out_plane,grad,shear_st
+                    endif
+                    
+                end do 
+            end do 
+        end do
+    end subroutine calc_fric
+    subroutine comp_grad(d,vel,grad)
+        real(rp), intent(in)                      :: vel
+        real(rp),intent(in)                       :: d
+        real(rp),intent(out)                      :: grad
+        if(abs(d)>1e-10)then
+            grad=vel*d**(-1)
+        else
+            grad=0._rp
+        endif
+    end subroutine comp_grad
+    subroutine get_plane(wall_loc,wall_loc_log,plane)
+        real(rp),intent(in),dimension(0:2,6,0:26)           :: wall_loc
+        logical,intent(in),dimension(6,0:26)                :: wall_loc_log
+        integer                                             :: o,p,m,n,co,g,f   
+        real(rp),dimension(3)                               :: center
+        real(rp),dimension(0:2,6,0:26)                      :: vec
+        real(rp),dimension(3)                               :: vec1,vec2,vec3,n1,n2,n3
+        real(rp),dimension(0:2,6,0:26)                      :: normal
+        logical,dimension(6,0:26)                           :: normal_loc
+        real(rp)                                            :: angle1,angle2,angle3
+        real(rp),intent(out),dimension(3,2)                 :: plane
+        real(rp)                                            :: out_dum
+
+        !first lets create a center
+        angle1=90._rp;angle2=90._rp;angle3=90._rp;
+        plane(:,:)=0._rp
+        normal_loc(:,:)=.false.
+        vec(:,:,:) = 0._rp
+        vec1(:) = 0._rp;vec2(:) = 0._rp;vec3(:) = 0._rp;
+        n1(:) = 0._rp;n2(:) = 0._rp;n3(:) = 0._rp;
+        center(:)=0._rp
+        co=0;
+        do n=0,26
+            do m=1,6
+                if(wall_loc_log(m,n))then
+                    center(:)=center(:)+wall_loc(:,m,n)
+                    co=co+1
+                endif
+            enddo
+        enddo
+        if(co>1)then
+            center(:)=center(:)/co
+        endif
+        !now lets get the vectors from the center
+        do n=0,26
+            do m=1,6
+                if(wall_loc_log(m,n))then
+                    vec(:,m,n)=wall_loc(:,m,n)-center(:)
+                endif
+            enddo
+        enddo
+        ! now we have the vectors lets compute their normals
+        ! we do it with a cross product
+        !print*, center
+        do n=0,26
+            do m=1,6
+                if(.not.(wall_loc_log(m,n)))cycle
+                vec1(:)=vec(:,m,n)
+                do g=0,26
+                    do f=1,6
+                        if(wall_loc_log(f,g))then
+                            if(g/=n.or.f/=m)then
+                                vec2(:)=vec(:,f,g)
+                                call comp_cross(vec1,vec2,n1)
+                                ! now we have a normal lets check this one for all vectors available
+                                do o=0,26
+                                    do p=1,6
+                                        if(.not.(wall_loc_log(p,o)))cycle
+                                        vec3=vec(:,p,o)
+                                        call comp_sca(vec3,n1,angle1,out_dum)
+                                        angle1=abs(90-angle1)
+                                        if(angle1<angle2)angle2=angle1
+                                    enddo
+                                enddo
+                            endif
+                        endif
+                        if(angle2<angle3)then
+                            angle3=angle2
+                            n2(:)=n1(:)
+                        endif
+                    enddo
+                enddo    
+            enddo
+        enddo
+        plane(:,1)=center(:)
+        plane(:,2)=n2(:)
+        ! now we have our normals lets check each normal w/ each vector 
+    end subroutine get_plane
+    subroutine comp_cross(vec1,vec2,vec3)
+        real(rp),intent(in),dimension(3) :: vec1,vec2
+        real(rp),intent(out),dimension(3) :: vec3
+        real(rp)                          :: i,j,k
+        real(rp)                          :: n
+        k=(vec1(1)*vec2(2))-(vec1(2)*vec2(1))
+        j=(vec1(3)*vec2(1))-(vec1(1)*vec2(3))
+        i=(vec1(2)*vec2(3))-(vec1(3)*vec2(2))
+        n=sqrt(i**2+j**2+k**2)
+        if(abs(n)<1e-10)then
+            vec3=0._rp
+        else
+            i=i*n**(-1);j=j*n**(-1);k=k*n**(-1)
+            vec3(:)=[i,j,k]
+        endif
+        
+    end subroutine comp_cross
+    subroutine comp_sca(vec1,vec2,angle,out)
+        real(rp),intent(in),dimension(3) :: vec1,vec2
+        real(rp),intent(out)             :: angle
+        real(rp),intent(out)             :: out
+        real(rp)                         :: b1,b2
+        out=vec1(1)*vec2(1)+vec1(2)*vec2(2)+vec1(3)*vec2(3)
+        b1=sqrt(vec1(1)**2+vec1(2)**2+vec1(3)**2)
+        b2=sqrt(vec2(1)**2+vec2(2)**2+vec2(3)**2)
+        if(tiny(b1)>0._rp)then
+            angle=out*(b1*b2)**(-1)
+            angle=acos(angle)*180/(3.1415) !radians to degree
+        else
+            out=epsilon(0._rp)
+        endif
+    end subroutine comp_sca
+
+
+    subroutine get_grid_loc(lo,i,j,k,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
+        integer,intent(in)                      :: i,j,k
+        real(rp),intent(out)                    :: x,y,z,xp,xm,yp,ym,zp,zm
+        integer,intent(in)                      :: dix,diy,diz
+        integer                                 :: ii,jj,kk
+        integer,intent(in),dimension(3)         :: lo
+        real(rp),intent(in),dimension(0:),optional  :: zc,zf
+        real(rp), intent(in),dimension(3)       :: dl
+        x=0;y=0;z=0;xp=0;xm=0;yp=0;ym=0;zp=0;zm=0;    
+        ii = lo(1)+i-1
+        jj = lo(2)+j-1
+        kk = lo(3)+k-1
+        x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
+        y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
+        xp=x+dl(1);xm=x-dl(1);yp=y+dl(2);ym=y-dl(2);
+        if(diz/=1)then
+            ! this means we are looking for either u or v so their location is at z center
+            ! we gonna use the senter of zc
+            z = zc(k)
+            zp = zc(k+1)
+            zm = zc(k-1)
+            ! we use k inestead of kk since kk is the global and k is the local array index
+        else
+            ! else than we are looking for the w which is located on the z face
+            z = zf(k)
+            zp = zf(k+1)
+            zm = zf(k-1)
+        endif                 
+    end subroutine get_grid_loc
     subroutine apply_ibm_staircase(field,mask_id,dt)
         implicit none
         real(rp),intent(inout),dimension(0:,0:,0:)  :: field

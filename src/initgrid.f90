@@ -135,15 +135,19 @@ module mod_initgrid
       zf(k) = zf(k-1) + dzf(k)
     end do
     !lets get diagnostics 
-    if(diagnostics.eqv..true..and.gtype==CLUSTER_ROUGH.and.myid==0)then
-      open(newunit=iunit,file=trim("grid_diagnostic.out"),&
-          status="replace", action="write")
-      do k=0,n
-        dzfp=dzf(k)*re_tau/hch
-        dzcp=dzc(k)*re_tau/hch
-        write(iunit,fmt_rp) zf(k),zc(k),dzf(k),dzc(k),dzfp,dzcp
-      end do
-      close(iunit)
+    if(diagnostics.eqv..true..and.gtype==CLUSTER_ROUGH)then
+      if(present(myid))then
+        if(myid==0)then
+          open(newunit=iunit,file=trim("grid_diagnostic.out"),&
+              status="replace", action="write")
+          do k=0,n
+            dzfp=dzf(k)*re_tau/hch
+            dzcp=dzc(k)*re_tau/hch
+            write(iunit,fmt_rp) zf(k),zc(k),dzf(k),dzc(k),dzfp,dzcp
+          end do
+          close(iunit)
+        endif
+      endif
     end if
   end subroutine initgrid
   !IBM aware grid stretching with geometric growth

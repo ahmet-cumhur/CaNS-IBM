@@ -226,7 +226,7 @@ module mod_ibm
         logical                                     :: ibm_diagnostic
         logical,dimension(0:,0:,0:),intent(inout)   :: band_id
         calc_inBetween=.false.
-        ibm_diagnostic=.false.
+        ibm_diagnostic=.true.
         if(use_hmap)then
             if (.not.present(hmap)) then
                 error stop "use_hmap=T but hmap not present"
@@ -563,9 +563,12 @@ module mod_ibm
             end select
         endif 
     end subroutine calc_lambda
-    subroutine calc_fric(lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+    subroutine calc_fric(fri_id,fname,myid,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_id,visc,vel_id,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
         ! routine creates the tangent and normal plane for 3D IBM
+        real(rp),dimension(:,:),intent(inout)                   :: fri_id
+        character(len=*), intent(in)                            :: fname
+        integer                                                 :: myid 
         real(rp), dimension(0:,0:,0:), intent(in   )            :: vel_id
         real(rp), intent(in)                                    :: visc                        
         logical , intent(in), dimension(0:1,3)                  :: ibm_direction
@@ -598,6 +601,17 @@ module mod_ibm
         real(rp),dimension(3)                                   :: nv,cp,bp
         real(rp)                                                :: angle_plane,out_plane,grad
         real(rp)                                                :: shear_st
+        integer                                                 :: count,iunit
+        character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
+                                 fmt_sp = '(*(es15.8e2,1x))'
+#if !defined(_SINGLE_PRECISION)
+        character(len=*), parameter :: fmt_rp = fmt_dp
+#else
+        character(len=*), parameter :: fmt_rp = fmt_sp
+#endif
+        ! init vars
+        fri_id(:,:) = 0._rp 
+        count = 0
         angle_plane=0._rp;out_plane=0._rp;grad=0._rp
         wall_loc_log(:,:)=.false.
         wall_loc_real(:)=0._rp
@@ -605,6 +619,7 @@ module mod_ibm
         x=0._rp;y=0._rp;z=0._rp;
         dzc_l=0._rp;dzf_l=0._rp
         xp=0._rp;xm=0._rp;yp=0._rp;ym=0._rp;zp=0._rp;zm=0._rp
+        ! calc part
         do k=(lbound(band_id,3)+1),(ubound(band_id,3)-1)
             do j=(lbound(band_id,2)+1),(ubound(band_id,2)-1)
                 do i=(lbound(band_id,1)+1),(ubound(band_id,1)-1)
@@ -710,7 +725,11 @@ module mod_ibm
                                 end do
                             endif
                         end do
-                        if(wc<=3)cycle
+                        if(wc<=3)then
+                            ! if we have not enough points cycle
+                            cycle
+                        endif
+                        count=count+1
                         call get_plane(wall_loc,wall_loc_log,plane)
                         !now we have the normal and center now lets get the distance
                         !lets get the location of the band point
@@ -729,12 +748,31 @@ module mod_ibm
                         !now  we have the gradient basic after this!
                         !mult. with viscosity to get the shear stress.
                         shear_st=visc*grad 
-                        print*,(90._rp-angle_plane),out_plane,grad,shear_st
+                        !print*,(90._rp-angle_plane),out_plane,grad,shear_st
+                        fri_id(count,1)=plane(1,1)
+                        fri_id(count,2)=plane(2,1)
+                        fri_id(count,3)=plane(3,1)
+                        fri_id(count,4)=i
+                        fri_id(count,5)=j
+                        fri_id(count,6)=k
+                        fri_id(count,7)=out_plane
+                        fri_id(count,8)=grad
+                        fri_id(count,9)=shear_st
                     endif
-                    
                 end do 
             end do 
         end do
+        ! now lets add an writer part
+        print*,count
+        if(myid == 0) then
+        open(newunit=iunit,file=fname)
+            do k=1,count
+                write(iunit,fmt_rp) fri_id(k,1),fri_id(k,2),fri_id(k,3),&
+                                fri_id(k,4),fri_id(k,5),fri_id(k,6),&
+                                fri_id(k,7),fri_id(k,8),fri_id(k,9)
+            end do
+        close(iunit)
+      end if
     end subroutine calc_fric
     subroutine comp_grad(d,vel,grad)
         real(rp), intent(in)                      :: vel
@@ -849,10 +887,11 @@ module mod_ibm
         out=vec1(1)*vec2(1)+vec1(2)*vec2(2)+vec1(3)*vec2(3)
         b1=sqrt(vec1(1)**2+vec1(2)**2+vec1(3)**2)
         b2=sqrt(vec2(1)**2+vec2(2)**2+vec2(3)**2)
-        if(tiny(b1)>0._rp)then
+        if(abs(b1)>1e-10.and.abs(b2)>1e-10)then
             angle=out*(b1*b2)**(-1)
             angle=acos(angle)*180/(3.1415) !radians to degree
         else
+            !we give out as epsilon since we will use it to divide
             out=epsilon(0._rp)
         endif
     end subroutine comp_sca

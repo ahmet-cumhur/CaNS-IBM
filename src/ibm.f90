@@ -563,12 +563,10 @@ module mod_ibm
             end select
         endif 
     end subroutine calc_lambda
-    subroutine calc_fric(fri_id,fname,myid,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+    subroutine calc_grad_dist(grad_dist_id,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_id,visc,vel_id,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
         ! routine creates the tangent and normal plane for 3D IBM
-        real(rp),dimension(:,:),intent(inout)                   :: fri_id
-        character(len=*), intent(in)                            :: fname
-        integer                                                 :: myid 
+        real(rp),dimension(:,:),intent(inout)                   :: grad_dist_id
         real(rp), dimension(0:,0:,0:), intent(in   )            :: vel_id
         real(rp), intent(in)                                    :: visc                        
         logical , intent(in), dimension(0:1,3)                  :: ibm_direction
@@ -594,23 +592,15 @@ module mod_ibm
         real(rp)                                                :: x,y,z
         real(rp)                                                :: xp,xm,yp,ym,zp,zm
         real(rp)                                                :: lambda!just to fullfill the calc_lamda
-        integer                                                 :: di,dj,dk,in,jn,kn
+        integer                                                 :: di,dj,dk,in,jn,kn,count
         real(rp),dimension(3)                                   :: wall_loc_real
         real(rp)                                                :: dzf_l,dzc_l
         real(rp),dimension(3,2)                                 :: plane
         real(rp),dimension(3)                                   :: nv,cp,bp
         real(rp)                                                :: angle_plane,out_plane,grad
-        real(rp)                                                :: shear_st
-        integer                                                 :: count,iunit
-        character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
-                                 fmt_sp = '(*(es15.8e2,1x))'
-#if !defined(_SINGLE_PRECISION)
-        character(len=*), parameter :: fmt_rp = fmt_dp
-#else
-        character(len=*), parameter :: fmt_rp = fmt_sp
-#endif
+
         ! init vars
-        fri_id(:,:) = 0._rp 
+        grad_dist_id(:,:) = 0._rp 
         count = 0
         angle_plane=0._rp;out_plane=0._rp;grad=0._rp
         wall_loc_log(:,:)=.false.
@@ -635,7 +625,7 @@ module mod_ibm
                             dk=modulo(nc/9,3)-1
                             in=i+di;jn=j+dj;kn=k+dk;
                             if(band_id(in,jn,kn))then
-                                xp=0._rp;xm=0._rp;yp=0._rp;ym=0._rp;zp=0._rp;zm=0._rp
+                                x=0._rp;y=0._rp;z=0._rp;xp=0._rp;xm=0._rp;yp=0._rp;ym=0._rp;zp=0._rp;zm=0._rp
                                 call get_grid_loc(lo,in,jn,kn,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm) 
                                 do c=1,6    
                                     select case(c)
@@ -744,36 +734,71 @@ module mod_ibm
                         !to the band point! lets get them scalar product
                         nv=plane(:,2)
                         call comp_sca(nv,cp,angle_plane,out_plane)
-                        call comp_grad(out_plane,vel_id(i,j,k),grad)
-                        !now  we have the gradient basic after this!
-                        !mult. with viscosity to get the shear stress.
-                        shear_st=visc*grad 
-                        !print*,(90._rp-angle_plane),out_plane,grad,shear_st
-                        fri_id(count,1)=plane(1,1)
-                        fri_id(count,2)=plane(2,1)
-                        fri_id(count,3)=plane(3,1)
-                        fri_id(count,4)=i
-                        fri_id(count,5)=j
-                        fri_id(count,6)=k
-                        fri_id(count,7)=out_plane
-                        fri_id(count,8)=grad
-                        fri_id(count,9)=shear_st
+                        if(out_plane<0._rp)nv=-nv ! we check if the output is neg.
+                        ! this means the normal vector is facing inwards, we want outwards facing
+                        call comp_sca(nv,cp,angle_plane,out_plane)
+                        grad_dist_id(count,1)=plane(1,1)
+                        grad_dist_id(count,2)=plane(2,1)
+                        grad_dist_id(count,3)=plane(3,1)
+                        grad_dist_id(count,4)=i!these are the locations of the velocities
+                        grad_dist_id(count,5)=j!these are the locations of the velocities
+                        grad_dist_id(count,6)=k!these are the locations of the velocities
+                        grad_dist_id(count,7)=out_plane
+                        grad_dist_id(count,8)=0._rp
+                        grad_dist_id(count,9)=0._rp
+                        ! here we only compute the geometrical distances! 
+                        ! since we have a stat. wall we dont need to compute the distances
+                        ! in each time step!
                     endif
                 end do 
             end do 
         end do
-        ! now lets add an writer part
-        print*,count
+    end subroutine calc_grad_dist
+    subroutine calc_shear_st(fname,myid,grad_dist_id,vel_id,band_id)
+        ! we assume the walls arent moving therefore we do the distance calc.
+        ! time and compute the gradient here at each wanted time step
+        logical, intent(in), dimension(0:,0:,0:)                :: band_id
+        integer,intent(in)                                      :: myid
+        character(len=*), intent(in)                            :: fname
+        real(rp),dimension(0:,0:,0:),intent(in)                 :: vel_id
+        real(rp),dimension(:,:),intent(inout)                   :: grad_dist_id
+        integer                                                 :: i,j,k,count,kk
+        real(rp)                                                :: grad,dist_grad,shear_st
+        integer                                                 :: iunit
+        character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
+                                 fmt_sp = '(*(es15.8e2,1x))'
+#if !defined(_SINGLE_PRECISION)
+        character(len=*), parameter :: fmt_rp = fmt_dp
+#else
+        character(len=*), parameter :: fmt_rp = fmt_sp
+#endif
+        grad=0._rp;i=0;j=0;k=0;count=0
+        do kk=lbound(grad_dist_id,1),ubound(grad_dist_id,1)
+            count=count+1
+            grad=0._rp
+            ! now we go through the data
+            i=grad_dist_id(kk,4)
+            j=grad_dist_id(kk,5)
+            k=grad_dist_id(kk,6)
+            dist_grad=grad_dist_id(kk,7)
+            !we have the location of the i,j,k for the velocity
+            call comp_grad(dist_grad,vel_id(i,j,k),grad)
+            shear_st=visc*grad
+            grad_dist_id(kk,8)=grad
+            grad_dist_id(kk,9)=shear_st
+        end do 
+        
         if(myid == 0) then
         open(newunit=iunit,file=fname)
             do k=1,count
-                write(iunit,fmt_rp) fri_id(k,1),fri_id(k,2),fri_id(k,3),&
-                                fri_id(k,4),fri_id(k,5),fri_id(k,6),&
-                                fri_id(k,7),fri_id(k,8),fri_id(k,9)
+                write(iunit,fmt_rp) grad_dist_id(k,1),grad_dist_id(k,2),grad_dist_id(k,3),&
+                                grad_dist_id(k,4),grad_dist_id(k,5),grad_dist_id(k,6),&
+                                grad_dist_id(k,7),grad_dist_id(k,8),grad_dist_id(k,9)
             end do
         close(iunit)
-      end if
-    end subroutine calc_fric
+        end if
+    end subroutine calc_shear_st
+
     subroutine comp_grad(d,vel,grad)
         real(rp), intent(in)                      :: vel
         real(rp),intent(in)                       :: d
@@ -790,12 +815,13 @@ module mod_ibm
         integer                                             :: o,p,m,n,co,g,f   
         real(rp),dimension(3)                               :: center
         real(rp),dimension(0:2,6,0:26)                      :: vec
-        real(rp),dimension(3)                               :: vec1,vec2,vec3,n1,n2,n3
+        real(rp),dimension(3)                               :: vec1,vec2,vec3,n1,n2,n3,n_av,n_ref
         real(rp),dimension(0:2,6,0:26)                      :: normal
         logical,dimension(6,0:26)                           :: normal_loc
         real(rp)                                            :: angle1,angle2,angle3
         real(rp),intent(out),dimension(3,2)                 :: plane
-        real(rp)                                            :: out_dum
+        real(rp)                                            :: out_dum,out_n,angle_dum
+        integer                                             :: c_n
 
         !first lets create a center
         angle1=90._rp;angle2=90._rp;angle3=90._rp;
@@ -804,8 +830,9 @@ module mod_ibm
         vec(:,:,:) = 0._rp
         vec1(:) = 0._rp;vec2(:) = 0._rp;vec3(:) = 0._rp;
         n1(:) = 0._rp;n2(:) = 0._rp;n3(:) = 0._rp;
+        n_av(:) = 0._rp;n_ref(:) = 0._rp;
         center(:)=0._rp
-        co=0;
+        co=0;c_n=0
         do n=0,26
             do m=1,6
                 if(wall_loc_log(m,n))then
@@ -838,28 +865,28 @@ module mod_ibm
                             if(g/=n.or.f/=m)then
                                 vec2(:)=vec(:,f,g)
                                 call comp_cross(vec1,vec2,n1)
+                                if(c_n<1)n_ref=n1
                                 ! now we have a normal lets check this one for all vectors available
-                                do o=0,26
-                                    do p=1,6
-                                        if(.not.(wall_loc_log(p,o)))cycle
-                                        vec3=vec(:,p,o)
-                                        call comp_sca(vec3,n1,angle1,out_dum)
-                                        angle1=abs(90-angle1)
-                                        if(angle1<angle2)angle2=angle1
-                                    enddo
-                                enddo
+                                ! lets check their direction then if they are positive lets add up 
+                                ! if they are neg. then lets change them (so they look outwards)
+                                ! after that simply average so we get an averaged normal
+                                if(c_n>1)then
+                                    ! here we check the new normal w/ with the first normal
+                                    call comp_sca(n1,n_ref,angle_dum,out_n)
+                                    if(out_n<0._rp)n1=-n1
+                                    ! now we have positive defined normal vector
+                                endif
+                                c_n=c_n+1 
+                                n_av=n_av+n1
                             endif
-                        endif
-                        if(angle2<angle3)then
-                            angle3=angle2
-                            n2(:)=n1(:)
                         endif
                     enddo
                 enddo    
             enddo
         enddo
+        n_av=n_av/c_n
         plane(:,1)=center(:)
-        plane(:,2)=n2(:)
+        plane(:,2)=n_av(:)
         ! now we have our normals lets check each normal w/ each vector 
     end subroutine get_plane
     subroutine comp_cross(vec1,vec2,vec3)

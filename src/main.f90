@@ -543,11 +543,11 @@ program cans
     allocate(fri_v(count(band_v),9))
     allocate(fri_w(count(band_w),9))
     print*,"we are here"     
-    call calc_fric(fri_u,"fric-u.out",myid,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+    call calc_grad_dist(fri_u,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_u,visc,u,1,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
-    call calc_fric(fri_v,"fric-v.out",myid,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+    call calc_grad_dist(fri_v,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_v,visc,v,0,1,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
-    call calc_fric(fri_w,"fric-w.out",myid,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+    call calc_grad_dist(fri_w,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_w,visc,w,0,0,1,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w)
@@ -720,9 +720,12 @@ program cans
       end do
     end if
     write(fldnum,'(i7.7)') istep
-    ! turb_statistics
+    ! turb_statistics+ friction statistics
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
       call out1d_chan(trim(datadir)//'turb_stats_'//fldnum//'.out',ng,lo,hi,3,l,dl,zc_g,u,v,w)
+      call calc_shear_st(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u,u,band_u)
+      call calc_shear_st(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v,v,band_v)
+      call calc_shear_st(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w,w,band_w)
     endif
     !
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then

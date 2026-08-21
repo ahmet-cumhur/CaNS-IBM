@@ -182,10 +182,12 @@ program cans
   logical,allocatable   :: band_u(:,:,:)
   logical,allocatable   :: band_v(:,:,:)
   logical,allocatable   :: band_w(:,:,:)
+  logical,allocatable   :: pband(:,:,:)
 
   real(rp),allocatable  :: fri_u(:,:)
   real(rp),allocatable  :: fri_v(:,:)
   real(rp),allocatable  :: fri_w(:,:)
+  real(rp),allocatable  :: p_grad(:,:)
 !*******HMAP********!
 !******************!
   !
@@ -496,9 +498,11 @@ program cans
     allocate(band_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(band_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(band_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(pband(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     band_u=.false.
     band_v=.false.
     band_w=.false.
+    pband=.false.
   endif
   !
   allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
@@ -539,16 +543,20 @@ program cans
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_v)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_w)
-    allocate(fri_u(count(band_u),9))
-    allocate(fri_v(count(band_v),9))
-    allocate(fri_w(count(band_w),9))
-    print*,"we are here"     
+    allocate(fri_u(count(band_u(1:n(1),1:n(2),1:n(3))),12))! we do this way so we exlude ghost cells and only focus on the inner cells
+    allocate(fri_v(count(band_v(1:n(1),1:n(2),1:n(3))),12))
+    allocate(fri_w(count(band_w(1:n(1),1:n(2),1:n(3))),12))
     call calc_grad_dist(fri_u,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                band_u,visc,u,1,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+                                band_u,1,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
     call calc_grad_dist(fri_v,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                band_v,visc,v,0,1,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+                                band_v,0,1,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
     call calc_grad_dist(fri_w,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                band_w,visc,w,0,0,1,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+                                band_w,0,0,1,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+    call get_pressure_band(p,pband,ibm_direction,amp_l,n_wave,l_0,phase_l,&
+        n,l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,lo,dl,zc,zf,dzf,dzc)
+     allocate(p_grad(count(pband(1:n(1),1:n(2),1:n(3))),12))
+     p_grad(:,:)=0._rp
+     !
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w)
 #endif
@@ -726,6 +734,9 @@ program cans
       call calc_shear_st(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u,u,band_u)
       call calc_shear_st(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v,v,band_v)
       call calc_shear_st(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w,w,band_w)
+      call get_wall_pres(trim(datadir)//"pressure"//fldnum//".out",myid,p,p_grad,lo,&
+                                ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                pband,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
     endif
     !
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then

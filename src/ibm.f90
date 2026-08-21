@@ -282,7 +282,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band and fluid
+                                            band_id(i,j,k) = .true. ! this means on band and fluid ! these are for friction calc.
                                 endif
                                 !mask_id(i,j,k) already has the velocity body information
                                 if(calc_inBetween)then 
@@ -564,11 +564,9 @@ module mod_ibm
         endif 
     end subroutine calc_lambda
     subroutine calc_grad_dist(grad_dist_id,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                band_id,visc,vel_id,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
+                                band_id,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
         ! routine creates the tangent and normal plane for 3D IBM
-        real(rp),dimension(:,:),intent(inout)                   :: grad_dist_id
-        real(rp), dimension(0:,0:,0:), intent(in   )            :: vel_id
-        real(rp), intent(in)                                    :: visc                        
+        real(rp),dimension(:,:),intent(inout)                   :: grad_dist_id                      
         logical , intent(in), dimension(0:1,3)                  :: ibm_direction
         real(rp), intent(in), dimension(0:1,3)                  :: amp_l
         integer , intent(in), dimension(0:1,3)                  :: n_wave
@@ -740,12 +738,15 @@ module mod_ibm
                         grad_dist_id(count,1)=plane(1,1)
                         grad_dist_id(count,2)=plane(2,1)
                         grad_dist_id(count,3)=plane(3,1)
-                        grad_dist_id(count,4)=i!these are the locations of the velocities
-                        grad_dist_id(count,5)=j!these are the locations of the velocities
-                        grad_dist_id(count,6)=k!these are the locations of the velocities
-                        grad_dist_id(count,7)=out_plane
-                        grad_dist_id(count,8)=0._rp
-                        grad_dist_id(count,9)=0._rp
+                        grad_dist_id(count,4)=nv(1)
+                        grad_dist_id(count,5)=nv(2)
+                        grad_dist_id(count,6)=nv(3)
+                        grad_dist_id(count,7)=i!these are the locations of the velocities
+                        grad_dist_id(count,8)=j!these are the locations of the velocities
+                        grad_dist_id(count,9)=k!these are the locations of the velocities
+                        grad_dist_id(count,10)=out_plane
+                        grad_dist_id(count,11)=0._rp
+                        grad_dist_id(count,12)=0._rp
                         ! here we only compute the geometrical distances! 
                         ! since we have a stat. wall we dont need to compute the distances
                         ! in each time step!
@@ -777,15 +778,15 @@ module mod_ibm
             count=count+1
             grad=0._rp
             ! now we go through the data
-            i=grad_dist_id(kk,4)
-            j=grad_dist_id(kk,5)
-            k=grad_dist_id(kk,6)
-            dist_grad=grad_dist_id(kk,7)
+            i=grad_dist_id(kk,7)
+            j=grad_dist_id(kk,8)
+            k=grad_dist_id(kk,9)
+            dist_grad=grad_dist_id(kk,10)
             !we have the location of the i,j,k for the velocity
             call comp_grad(dist_grad,vel_id(i,j,k),grad)
             shear_st=visc*grad
-            grad_dist_id(kk,8)=grad
-            grad_dist_id(kk,9)=shear_st
+            grad_dist_id(kk,11)=grad
+            grad_dist_id(kk,12)=shear_st
         end do 
         
         if(myid == 0) then
@@ -793,7 +794,8 @@ module mod_ibm
             do k=1,count
                 write(iunit,fmt_rp) grad_dist_id(k,1),grad_dist_id(k,2),grad_dist_id(k,3),&
                                 grad_dist_id(k,4),grad_dist_id(k,5),grad_dist_id(k,6),&
-                                grad_dist_id(k,7),grad_dist_id(k,8),grad_dist_id(k,9)
+                                grad_dist_id(k,7),grad_dist_id(k,8),grad_dist_id(k,9),&
+                                grad_dist_id(k,10),grad_dist_id(k,11),grad_dist_id(k,12)
             end do
         close(iunit)
         end if
@@ -815,7 +817,7 @@ module mod_ibm
         integer                                             :: o,p,m,n,co,g,f   
         real(rp),dimension(3)                               :: center
         real(rp),dimension(0:2,6,0:26)                      :: vec
-        real(rp),dimension(3)                               :: vec1,vec2,vec3,n1,n2,n3,n_av,n_ref
+        real(rp),dimension(3)                               :: vec1,vec2,vec3,n1,n2,n3,n_av,n_ref,norm_nav
         real(rp),dimension(0:2,6,0:26)                      :: normal
         logical,dimension(6,0:26)                           :: normal_loc
         real(rp)                                            :: angle1,angle2,angle3
@@ -830,7 +832,7 @@ module mod_ibm
         vec(:,:,:) = 0._rp
         vec1(:) = 0._rp;vec2(:) = 0._rp;vec3(:) = 0._rp;
         n1(:) = 0._rp;n2(:) = 0._rp;n3(:) = 0._rp;
-        n_av(:) = 0._rp;n_ref(:) = 0._rp;
+        n_av(:) = 0._rp;n_ref(:) = 0._rp;norm_nav(:)=0._rp;
         center(:)=0._rp
         co=0;c_n=0
         do n=0,26
@@ -885,8 +887,9 @@ module mod_ibm
             enddo
         enddo
         n_av=n_av/c_n
+        call nomrlalize_vec(n_av,norm_nav)
         plane(:,1)=center(:)
-        plane(:,2)=n_av(:)
+        plane(:,2)=norm_nav(:)
         ! now we have our normals lets check each normal w/ each vector 
     end subroutine get_plane
     subroutine comp_cross(vec1,vec2,vec3)
@@ -906,6 +909,15 @@ module mod_ibm
         endif
         
     end subroutine comp_cross
+    subroutine nomrlalize_vec(vec1,vec2)
+        real(rp),intent(in),dimension(3)     :: vec1 
+        real(rp),intent(out),dimension(3)    :: vec2
+        real(rp)                             :: i,j,k,n
+        n=sqrt(vec1(1)**2+vec1(2)**2+vec1(3)**2)
+        vec2(1)=vec1(1)*n**(-1);
+        vec2(2)=vec1(2)*n**(-1)
+        vec2(3)=vec1(3)*n**(-1)
+    end subroutine nomrlalize_vec
     subroutine comp_sca(vec1,vec2,angle,out)
         real(rp),intent(in),dimension(3) :: vec1,vec2
         real(rp),intent(out)             :: angle
@@ -922,7 +934,6 @@ module mod_ibm
             out=epsilon(0._rp)
         endif
     end subroutine comp_sca
-
 
     subroutine get_grid_loc(lo,i,j,k,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
         integer,intent(in)                      :: i,j,k
@@ -953,6 +964,187 @@ module mod_ibm
             zm = zf(k-1)
         endif                 
     end subroutine get_grid_loc
+    ! here we do the wall pressure calc stuff
+
+    subroutine get_pressure_band(p,pband,ibm_direction,amp_l,n_wave,l_0,phase_l,&
+        n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,lo,dl,zc,zf,dzf,dzc)
+        logical , intent(in), dimension(0:1,3)      :: ibm_direction
+        real(rp), intent(in), dimension(0:1,3)      :: amp_l
+        integer , intent(in), dimension(0:1,3)      :: n_wave
+        real(rp), intent(in), dimension(0:1,3)      :: l_0
+        real(rp), intent(in), dimension(0:1,3)      :: phase_l
+        integer , intent(in), dimension(3)          :: n
+        real(rp), intent(in), dimension(3)          :: l
+        real(rp),intent(in),optional                :: hmap(0:,0:)
+        real(rp),intent(in),optional                :: l1_hmap,l2_hmap 
+        integer,intent(in),optional                 :: n1_hmap,n2_hmap
+        integer,intent(in),dimension(3)             :: lo
+        real(rp),intent(in),dimension(0:)           :: zc,zf,dzc,dzf
+        real(rp), intent(in),dimension(3)           :: dl
+        logical,intent(inout),dimension(0:,0:,0:)   :: pband
+        real(rp),intent(in),dimension(0:,0:,0:)     :: p
+        real(rp)                                    :: x,y,z,xp,xm,yp,ym,zp,zm
+        real(rp)                                    :: x_nei,y_nei,z_nei,xp_nei,xm_nei,yp_nei,ym_nei,zp_nei,zm_nei
+        integer                                     :: i,j,k,s,kk                            
+        i=0;j=0;k=0;s=0;kk=0;
+        do k=(lbound(p,3)+1),(ubound(p,3)-1)
+            do j=(lbound(p,2)+1),(ubound(p,2)-1)
+                do i=(lbound(p,1)+1),(ubound(p,1)-1) ! p nprmally has ghost cells so lets just look at real locs
+                    x=0;y=0;z=0;xp=0;xm=0;yp=0;ym=0;zp=0;zm=0; 
+                    call get_grid_loc(lo,i,j,k,dl,zc,zf,0,0,0,x,y,z,xp,xm,yp,ym,zp,zm)
+                    ! pressure point that we are shouldnt be in the body 
+                    ! and next one should be inside so we can count it as an just above the surface
+                    do s=1,6
+                        select case(s)
+                            case(1)
+                                !xp
+                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
+                                           amp_l,n_wave,l_0,phase_l,xp,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                           pband(i,j,k)=.true.
+                                endif
+                            case(2)
+                                !xm
+                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
+                                           amp_l,n_wave,l_0,phase_l,xm,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                           pband(i,j,k)=.true.
+                                endif
+                            case(3)
+                                !yp
+                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
+                                           amp_l,n_wave,l_0,phase_l,x,yp,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                           pband(i,j,k)=.true.
+                                endif
+                            case(4)
+                                !ym
+                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
+                                           amp_l,n_wave,l_0,phase_l,x,ym,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                           pband(i,j,k)=.true.
+                                endif
+                            case(5)
+                                !zp
+                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
+                                           amp_l,n_wave,l_0,phase_l,x,y,zp,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                           pband(i,j,k)=.true.
+                                endif
+                            case(6)
+                                !zp
+                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
+                                           amp_l,n_wave,l_0,phase_l,x,y,zm,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
+                                           pband(i,j,k)=.true.
+                                endif
+                            case default
+                                print*,"somtheting wrong at the pband locating"
+                        end select
+                    end do
+                end do 
+            end do
+        end do   
+    end subroutine get_pressure_band
+    subroutine get_wall_pres(fname,myid,p,p_grad,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                pband,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
+        integer,intent(in)                          :: myid
+        character(len=*), intent(in)                :: fname
+        real(rp),intent(in),dimension(0:,0:,0:)     :: p                        
+        real(rp),dimension(:,:),intent(inout)       :: p_grad
+        logical , intent(in), dimension(0:1,3)      :: ibm_direction
+        real(rp), intent(in), dimension(0:1,3)      :: amp_l
+        integer , intent(in), dimension(0:1,3)      :: n_wave
+        real(rp), intent(in), dimension(0:1,3)      :: l_0
+        real(rp), intent(in), dimension(0:1,3)      :: phase_l
+        integer , intent(in), dimension(3)          :: n
+        real(rp), intent(in), dimension(3)          :: l
+        real(rp),intent(in),optional                :: hmap(0:,0:)
+        real(rp),intent(in),optional                :: l1_hmap,l2_hmap 
+        integer,intent(in),optional                 :: n1_hmap,n2_hmap
+        integer,intent(in),dimension(3)             :: lo
+        real(rp),intent(in),dimension(0:)           :: zc,zf,dzc,dzf
+        real(rp), intent(in),dimension(3)           :: dl
+        logical,intent(inout),dimension(0:,0:,0:)   :: pband
+
+        real(rp),dimension(3)                       :: c0,p_normalv
+        integer                                     :: kk,dix,diy,diz 
+        integer                                     :: i,j,k,m,in,jn,kn,di,dj,dk,count,gen_count,wr
+        real(rp)                                    :: angle_dum,dist,x,y,z,xp,xm,yp,ym,zp,zm
+        real(rp),dimension(3)                       :: vec                                    
+        real(rp)                                    :: pw,b !b is the the pressure gradient
+        real(rp)                                    :: s0,s1,s2,t0,t1
+        integer :: iunit
+        character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
+                                       fmt_sp = '(*(es15.8e2,1x))'
+#if !defined(_SINGLE_PRECISION)
+        character(len=*), parameter :: fmt_rp = fmt_dp
+#else
+        character(len=*), parameter :: fmt_rp = fmt_sp
+#endif
+        kk=0;dix=0;diy=0;diz=0;m=0;count=0;gen_count=0;wr=0;
+        dist=0._rp;angle_dum=0._rp;vec(:)=0._rp
+        ! now we have the pressures that are on the surface but arent in the solid
+        ! lets get their planes etc. we can directly call the grad distance
+        ! to create a normal and a plane for each pressure band point 
+        ! like we did w/ the velocities
+        call  calc_grad_dist(p_grad,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                pband,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
+        ! this subroutine directly returns us an array where the pressure band locations that we located
+        ! have their normal and a center point 
+        do kk=lbound(p_grad,1),ubound(p_grad,1)
+            gen_count=gen_count+1
+            c0(1)=p_grad(kk,1)
+            c0(2)=p_grad(kk,2)
+            c0(3)=p_grad(kk,3)
+            p_normalv(1)=p_grad(kk,4)
+            p_normalv(2)=p_grad(kk,5)
+            p_normalv(3)=p_grad(kk,6)
+            i=p_grad(kk,7)
+            j=p_grad(kk,8)
+            k=p_grad(kk,9)
+            ! so lets search the around the 
+            s0=0._rp;s1=0._rp;s2=0._rp;t0=0._rp;t1=0._rp;count=0._rp;
+            do m=0,26
+                di=modulo(m,3)-1
+                dj=modulo(m/3,3)-1
+                dk=modulo(m/9,3)-1
+                in=i+di;jn=j+dj;kn=k+dk
+                ! so we check if the neighbour of the band poin is in fluid
+                if(kn==k.and.jn==j.and.in==i)cycle ! we avoid the band point
+                call get_grid_loc(lo,in,jn,kn,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
+                if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
+                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))cycle ! if is in body then we cycle to next
+                ! comp vec
+                count=count+1
+                vec(1)=x-c0(1);vec(2)=y-c0(2);vec(3)=z-c0(3)
+                call comp_sca(vec,p_normalv,angle_dum,dist)
+                !now we have the distance to the center
+                s0=count
+                s2=s2+dist**2
+                s1=s1+dist
+                t0=t0+p(in,jn,kn)
+                t1=t1+dist*p(in,jn,kn)
+            end do
+            if(s0<3)cycle
+            ! we use direct mse from the gatti's source 
+            pw=(s2*t0-s1*t1)/(s0*s2-s1**2)
+            b=(s0*t1-s1*t0)/(s0*s2-s1**2)
+            p_grad(kk,11)=pw
+            p_grad(kk,12)=b
+        end do 
+        if(myid == 0) then
+        open(newunit=iunit,file=fname)
+            do wr=1,gen_count
+                write(iunit,fmt_rp) p_grad(wr,1),p_grad(wr,2),p_grad(wr,3),&
+                                    p_grad(wr,4),p_grad(wr,5),p_grad(wr,6),&
+                                    p_grad(wr,7),p_grad(wr,8),p_grad(wr,9),&
+                                    p_grad(wr,10),p_grad(wr,11),p_grad(wr,12)
+            end do
+        close(iunit)
+        end if
+    end subroutine get_wall_pres
+
     subroutine apply_ibm_staircase(field,mask_id,dt)
         implicit none
         real(rp),intent(inout),dimension(0:,0:,0:)  :: field

@@ -1,16 +1,16 @@
 &dns
-ng(1:3) = 128, 128, 128
-l(1:3) = 1., 1., 1.
-gtype = 5, gr = 0.
+ng(1:3) = 64, 64, 64
+l(1:3) = 3., 1.5, 1.
+gtype = 1, gr = 1.
 dzp_fine=0.5, dzp_coarse=3.17
-cfl = 0.1, dtmax = 1.e-4, dt_f = -1.
+cfl = 0.95, dtmax = 1.e9, dt_f = -1.
 visci = 1000.
-inivel = 'zer'
-is_wallturb = F
-nstep = 100000, time_max = 1., tw_max = 0.1
-stop_type(1:3) = F, T, F
+inivel = 'poi'
+is_wallturb = T
+nstep = 100000, time_max = 100., tw_max = 0.1
+stop_type(1:3) = T, F, F
 restart = F, is_overwrite_save = T, nsaves_max = 0
-icheck = 250, iout0d = 250, iout1d = 250, iout2d = 250, iout3d = 250, isave = 250
+icheck = 10, iout0d = 10, iout1d = 10, iout2d = 10, iout3d = 10, isave = 10
 cbcvel(0:1,1:3,1) = 'P','P',  'P','P',  'D','D'
 cbcvel(0:1,1:3,2) = 'P','P',  'P','P',  'D','D'
 cbcvel(0:1,1:3,3) = 'P','P',  'P','P',  'D','D'
@@ -19,15 +19,31 @@ bcvel(0:1,1:3,1) =  0.,0.,   0.,0.,   0.,0.
 bcvel(0:1,1:3,2) =  0.,0.,   0.,0.,   0.,0.
 bcvel(0:1,1:3,3) =  0.,0.,   0.,0.,   0.,0.
 bcpre(0:1,1:3)   =  0.,0.,   0.,0.,   0.,0.
-bforce(1:3) = 1., 0., 0.
-is_forced(1:3) = F, F, F
-velf(1:3) = 0., 0., 0.
+bforce(1:3) = 0., 0., 0.
+is_forced(1:3) = T, F, F
+velf(1:3) = 1., 0., 0.
+nscal= 1
+gacc= 0.0,0.0,0.0
 dims(1:2) = 0, 0, ipencil_axis = 1
 /
 
 &cudecomp
 cudecomp_t_comm_backend = 0, cudecomp_is_t_enable_nccl = T, cudecomp_is_t_enable_nvshmem = T
 cudecomp_h_comm_backend = 0, cudecomp_is_h_enable_nccl = T, cudecomp_is_h_enable_nvshmem = T
+/
+
+&scalar
+alphai(1) = 180
+beta=0
+iniscal(1) = "zer" 
+cbcscal(0:1,1:3,1) = 'P','P',  'P','P',  'D','D'
+bcscal(0:1,1:3,1)  =  0.,0.,   0.,0.,   0.,0.
+cbcscal_ibm(1) = "D"
+bcscal_ibm(1)  = 1.0
+ssource(1) = 0.0
+is_sforced(1) = F
+scalf(1) = 0.0
+is_boussinesq_buoyancy = F
 /
 
 &numerics
@@ -56,7 +72,7 @@ phase_l = 0.0,0.0, 0.0,0.0, 0.0,0.0
 /
 
 &hmap
-use_hmap = T
+use_hmap = F
 hmap_mode="fit"
 override_grid = T
 hmap_name = "thakkar"

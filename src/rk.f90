@@ -405,7 +405,7 @@ module mod_rk
   end subroutine rk
   !
   subroutine rk_scal(rkpar,n,dli,l,dzci,dzfi,grid_vol_ratio_f,alpha,dt,is_bound,u,v,w, &
-                     is_forced,scalf,ssource,fluxo,dsdtrko,s,f)
+                     is_forced,scalf,ssource,fluxo,dsdtrko,s,f,A_s,B_s)
 #if defined(_OPENACC)
     use mod_common_cudecomp, only: dsdtrk_t => work
 #endif
@@ -441,6 +441,8 @@ module mod_rk
     real(rp), dimension(0:1,3) :: flux
     integer :: i,j,k
     real(rp) :: mean
+    real(rp),intent(in) :: A_s(0:,0:,0:)
+    real(rp),intent(in) :: B_s(0:,0:,0:)
     !
     factor1 = rkpar(1)*dt
     factor2 = rkpar(2)*dt
@@ -486,7 +488,7 @@ module mod_rk
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
-          s(i,j,k) = s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource
+          s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource)/A_s(i,j,k)
           if(is_impdiff) then
             s(i,j,k) = s(i,j,k) + factor12*dsdtrkd(i,j,k)
           end if
@@ -500,7 +502,7 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
-            s(i,j,k) = s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource
+            s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource)/A_s(i,j,k)
           end do
         end do
       end do
@@ -510,8 +512,8 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
-            s(i,j,k) = s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + &
-                                  factor12*(ssource + dsdtrkd(i,j,k))
+            s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + &
+                                  factor12*(ssource + dsdtrkd(i,j,k)))/A_s(i,j,k)
           end do
         end do
       end do

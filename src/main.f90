@@ -57,6 +57,10 @@ program cans
                                  cbcvel,bcvel,cbcpre,bcpre, &
                                  is_forced,bforce,velf, &
                                  gacc,nscal,beta, &
+                                 alphai,iniscal,cbcscal,bcscal,&
+                                 cbcscal_ibm,bcscal_ibm,&
+                                 ssource,is_sforced,scalf,&
+                                 is_boussinesq_buoyancy,&
                                  dims, &
                                  nb,is_bound, &
                                  rkcoeff,small, &
@@ -142,7 +146,7 @@ program cans
   type(scalar), pointer :: s
   real(rp) :: meanscal
   real(rp), allocatable, dimension(:) :: fs
-  integer :: iscal,is
+  integer :: iscal,is,nscalibm
   !
   !real(rp), allocatable, dimension(:) :: var
   real(rp), dimension(42) :: var
@@ -166,19 +170,23 @@ program cans
   logical,allocatable   :: mask_u(:,:,:)
   logical,allocatable   :: mask_v(:,:,:)
   logical,allocatable   :: mask_w(:,:,:)
+  logical,allocatable   :: mask_s(:,:,:,:)!(i,j,k,nscal)
   real(rp),allocatable  :: lap_u(:,:,:)
   real(rp),allocatable  :: lap_v(:,:,:)
   real(rp),allocatable  :: lap_w(:,:,:)
+  real(rp),allocatable  :: lap_s(:,:,:,:)!(i,j,k,nscal)
 
   real(rp),allocatable  :: A_u(:,:,:)
   real(rp),allocatable  :: A_v(:,:,:)
   real(rp),allocatable  :: A_w(:,:,:)
+  real(rp),allocatable  :: A_s(:,:,:,:)!(i,j,k,nscal)
   real(rp),allocatable  :: B_u(:,:,:)
   real(rp),allocatable  :: B_v(:,:,:)
   real(rp),allocatable  :: B_w(:,:,:)
+  real(rp),allocatable  :: B_s(:,:,:,:)!(i,j,k,nscal)
 
   real(rp)              :: mean_u,mean_v,mean_w
-
+  ! fric-pre arrays
   logical,allocatable   :: band_u(:,:,:)
   logical,allocatable   :: band_v(:,:,:)
   logical,allocatable   :: band_w(:,:,:)
@@ -480,18 +488,22 @@ program cans
     allocate(mask_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(mask_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(mask_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(mask_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
     ! isInbody ---> false 
     ! so they start w/ all fluid
     print*, "***IBM coefficients are initializing***"
     mask_u = .false.
     mask_v = .false.
     mask_w = .false.
+    mask_s = .false.
   endif
   !
   if(ibm_2nd)then
     allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(lap_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
+    lap_s=0._rp
     lap_u=0._rp
     lap_v=0._rp
     lap_w=0._rp
@@ -508,15 +520,19 @@ program cans
   allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(A_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(A_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(A_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
   allocate(B_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(B_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(B_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+  allocate(B_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
   A_u=1._rp
   A_v=1._rp
   A_w=1._rp
+  A_s=1._rp
   B_u=1._rp
   B_v=1._rp
   B_w=1._rp
+  B_s=1._rp
   !
 #if defined(_OPENACC)
   !$acc enter data copyin(A_u,A_v,A_w,B_u,B_v,B_w)
@@ -531,6 +547,10 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
+    do nscalibm=1,nscal
+      call set_ibm_staircase(lo,mask_s(:,:,:,nscalibm),0,0,0,n,l,dl,&
+      ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
+    end do
 #if defined (_OPENACC)
     !$acc enter data copyin(mask_u,mask_v,mask_w)
 #endif
@@ -543,6 +563,10 @@ program cans
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_v)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_w)
+    do nscalibm=1,nscal
+      call set_ibm_2nd(lo,mask_s(:,:,:,nscalibm),lap_s(:,:,:,nscalibm),0,0,0,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                              hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap)
+    end do
     allocate(fri_u(count(band_u(1:n(1),1:n(2),1:n(3))),12))! we do this way so we exlude ghost cells and only focus on the inner cells
     allocate(fri_v(count(band_v(1:n(1),1:n(2),1:n(3))),12))
     allocate(fri_w(count(band_w(1:n(1),1:n(2),1:n(3))),12))
@@ -590,6 +614,10 @@ program cans
         call apply_ibm_staircase(u,mask_u,dtrk)
         call apply_ibm_staircase(v,mask_v,dtrk)
         call apply_ibm_staircase(w,mask_w,dtrk)
+        do nscalibm=1,nscal
+          call apply_ibm_staircase_scalar(scalars(nscalibm)%val,&
+              mask_s(:,:,:,nscalibm),bcscal_ibm(nscalibm))
+        end do 
       endif
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
       !*******************!
@@ -598,12 +626,17 @@ program cans
         call calc_a_b(lap_u,A_u,B_u,dtrk,visc,dl)
         call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
         call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
+        do nscalibm=1,nscal
+          call calc_a_b(lap_s(:,:,:,nscalibm),&
+          A_s(:,:,:,nscalibm),B_s(:,:,:,nscalibm),&
+          dtrk,scalars(nscalibm)%alpha,dl)
+        end do  
       endif
       !*******************!
       do iscal=1,nscal
         s => scalars(iscal)
         call rk_scal(rkcoeff(:,irk),n,dli,l,dzci,dzfi,grid_vol_ratio_f,s%alpha,dt,is_bound,u,v,w, &
-                     s%is_forced,s%scalf,s%source,s%fluxo,s%dsdtrko,s%val,s%f)
+                     s%is_forced,s%scalf,s%source,s%fluxo,s%dsdtrko,s%val,s%f,A_s(:,:,:,iscal),B_s(:,:,:,iscal))
         call bulk_forcing_s(n,s%is_forced,s%f,s%val)
         fs(iscal) = fs(iscal) + s%f
         if(is_impdiff) then
@@ -633,6 +666,10 @@ program cans
         call apply_ibm_staircase(u,mask_u,dtrk)
         call apply_ibm_staircase(v,mask_v,dtrk)
         call apply_ibm_staircase(w,mask_w,dtrk)
+        do nscalibm=1,nscal
+          call apply_ibm_staircase_scalar(scalars(nscalibm)%val,&
+              mask_s(:,:,:,nscalibm),bcscal_ibm(nscalibm))
+        end do 
       endif
       !*******************!
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)

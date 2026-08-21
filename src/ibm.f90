@@ -224,9 +224,9 @@ module mod_ibm
         integer                                     :: n_hidden,ncand
         logical                                     :: calc_inBetween
         logical                                     :: ibm_diagnostic
-        logical,dimension(0:,0:,0:),intent(inout)   :: band_id
+        logical,dimension(0:,0:,0:),intent(inout),optional   :: band_id
         calc_inBetween=.false.
-        ibm_diagnostic=.true.
+        ibm_diagnostic=.false.
         if(use_hmap)then
             if (.not.present(hmap)) then
                 error stop "use_hmap=T but hmap not present"
@@ -282,7 +282,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band and fluid ! these are for friction calc.
+                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band and fluid ! these are for friction calc.
                                 endif
                                 !mask_id(i,j,k) already has the velocity body information
                                 if(calc_inBetween)then 
@@ -314,7 +314,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band
+                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
                                 endif
                                 if(calc_inBetween)then 
                                     if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
@@ -342,7 +342,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,yp,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band
+                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
                                 endif
                                 if(calc_inBetween)then 
                                     if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
@@ -369,7 +369,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band
+                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
                                 endif
                                 if(calc_inBetween)then 
                                     if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
@@ -403,7 +403,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band
+                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
                                 endif
                             case(6)
                                 ! zm
@@ -419,7 +419,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            band_id(i,j,k) = .true. ! this means on band
+                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
                                 endif
                         end select
                     end do
@@ -430,7 +430,7 @@ module mod_ibm
             c=0
             print*,"max height of the hmap: ",hmax,hmin
             print*, "possible problematic locations: ",n_hidden,ncand
-            print*, "number of band locations: ",count(band_id)
+            if(present(band_id))print*, "number of band locations: ",count(band_id)
             print*, "number of IBM locations: ",count(mask_id)
             do k=1,n(3)
                 do j=1,n(2)
@@ -1163,4 +1163,22 @@ module mod_ibm
             end do 
         end do
     end subroutine apply_ibm_staircase
+    subroutine apply_ibm_staircase_scalar(scalar_field,scalar_mask_id,scalar_bc)
+        implicit none
+        real(rp),intent(inout),dimension(0:,0:,0:)  :: scalar_field
+        logical,intent(in),dimension(0:,0:,0:)      :: scalar_mask_id
+        real(rp),intent(in)                         :: scalar_bc
+        integer :: i,j,k
+        !$acc parallel loop collapse(3) default(present) async(1)
+        !$OMP parallel do   collapse(3) DEFAULT(shared)
+        do k = lbound(scalar_field,3)+1,ubound(scalar_field,3)-1
+            do j = lbound(scalar_field,2)+1,ubound(scalar_field,2)-1
+                do i = lbound(scalar_field,1)+1,ubound(scalar_field,1)-1
+                    if (scalar_mask_id(i,j,k).eqv..true.)then
+                        scalar_field(i,j,k) = scalar_bc 
+                    endif
+                end do 
+            end do 
+        end do
+    end subroutine apply_ibm_staircase_scalar
 end module mod_ibm

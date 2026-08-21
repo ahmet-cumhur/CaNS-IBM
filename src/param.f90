@@ -80,6 +80,9 @@ logical , protected, allocatable, dimension(:) :: is_sforced
 real(rp), protected, allocatable, dimension(:) :: scalf
 logical , protected :: is_boussinesq_buoyancy = .false.
 real(rp), protected :: alpha_max
+! scalar-ibm
+character(len=1)  , protected, allocatable, dimension(:) :: cbcscal_ibm ! size (nscal)
+real(rp)          , protected, allocatable, dimension(:) ::  bcscal_ibm ! size (nscal)
 !
 #if defined(_OPENACC)
 !
@@ -168,6 +171,7 @@ contains
                      alphai,beta, &
                      iniscal, &
                      cbcscal,bcscal, &
+                     cbcscal_ibm,bcscal_ibm,&
                      ssource, &
                      is_sforced, &
                      scalf, &
@@ -322,6 +326,7 @@ contains
         !
         allocate(alphai(nscal),iniscal(nscal), &
                  cbcscal(0:1,3,nscal),bcscal(0:1,3,nscal), &
+                 cbcscal_ibm(nscal),bcscal_ibm(nscal),&
                  ssource(nscal),is_sforced(nscal),scalf(nscal))
         !
         ! set default values
@@ -330,6 +335,8 @@ contains
         ssource(:)    = 0.
         is_sforced(:) = .false.
         scalf(:)      = 0.
+        cbcscal_ibm(:) = "D"
+        bcscal_ibm(:)  = 0._rp
         !
         ! read `scalar` namelist
         !

@@ -167,40 +167,48 @@ program cans
   integer :: k,kk
   logical :: is_done,kill
 !********IBM*******!
+  integer               :: ibm_i,np_mpi
+  integer               :: size_u,size_v,size_w,size_s
+  integer,allocatable   :: fri_u_ga(:),fri_v_ga(:),fri_w_ga(:),sca_ga(:)
+  integer,allocatable   :: displ_u(:),displ_v(:),displ_w(:),displ_s(:)
   logical,allocatable   :: mask_u(:,:,:)
   logical,allocatable   :: mask_v(:,:,:)
   logical,allocatable   :: mask_w(:,:,:)
-  logical,allocatable   :: mask_s(:,:,:,:)!(i,j,k,nscal)
+  logical,allocatable   :: mask_s(:,:,:)!(i,j,k)
   real(rp),allocatable  :: lap_u(:,:,:)
   real(rp),allocatable  :: lap_v(:,:,:)
   real(rp),allocatable  :: lap_w(:,:,:)
-  real(rp),allocatable  :: lap_s(:,:,:,:)!(i,j,k,nscal)
+  real(rp),allocatable  :: lap_s(:,:,:)!(i,j,k)
 
   real(rp),allocatable  :: A_u(:,:,:)
   real(rp),allocatable  :: A_v(:,:,:)
   real(rp),allocatable  :: A_w(:,:,:)
-  real(rp),allocatable  :: A_s(:,:,:,:)!(i,j,k,nscal)
+  real(rp),allocatable  :: A_s(:,:,:)!(i,j,k)
   real(rp),allocatable  :: B_u(:,:,:)
   real(rp),allocatable  :: B_v(:,:,:)
   real(rp),allocatable  :: B_w(:,:,:)
-  real(rp),allocatable  :: B_s(:,:,:,:)!(i,j,k,nscal)
+  real(rp),allocatable  :: B_s(:,:,:)!(i,j,k)
 
   real(rp)              :: mean_u,mean_v,mean_w
   ! fric-pre arrays
   logical,allocatable   :: band_u(:,:,:)
   logical,allocatable   :: band_v(:,:,:)
   logical,allocatable   :: band_w(:,:,:)
-  logical,allocatable   :: pband(:,:,:)
+  logical,allocatable   :: band_s(:,:,:)
 
   real(rp),allocatable  :: fri_u(:,:)
   real(rp),allocatable  :: fri_v(:,:)
   real(rp),allocatable  :: fri_w(:,:)
   real(rp),allocatable  :: p_grad(:,:)
+  real(rp),allocatable,target  :: fri_u_g(:,:),fri_v_g(:,:),fri_w_g(:,:),p_grad_g(:,:)
+  real(rp),allocatable,target  :: dum_g(:,:)
+  real(rp),pointer      :: globu(:,:),globv(:,:),globw(:,:),globp(:,:)
 !*******HMAP********!
 !******************!
   !
   call MPI_INIT(ierr)
   call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ierr)
+  call MPI_COMM_SIZE(MPI_COMM_WORLD,np_mpi,ierr)
   !
   ! read parameter file
   !
@@ -459,36 +467,22 @@ program cans
   end do
   !$acc wait
   !
-  ! post-process and write initial condition
-  !
-  write(fldnum,'(i7.7)') istep
-  !$acc wait ! not needed but to prevent possible future issues
-  !$acc update self(u,v,w,p)
-  do iscal=1,nscal
-    !$acc update self(scalars(iscal)%val)
-  end do
-  if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
-    include 'out1d.h90'
-  end if
-  if(iout2d > 0.and.mod(istep,max(iout2d,1)) == 0) then
-    include 'out2d.h90'
-  end if
-  if(iout3d > 0.and.mod(istep,max(iout3d,1)) == 0) then
-    include 'out3d.h90'
-  end if
-  !
   call chkdt(n,dl,dzci,dzfi,visc,alpha_max,u,v,w,dt_cfl)
   dt = merge(dt_f,min(cfl*dt_cfl,dtmax),dt_f > 0.)
   if(myid == 0) print*, 'dt_cfl = ', dt_cfl, 'dt = ', dt
   dti = 1./dt
   kill = .false.
 !**********IBM-PART***********!
+  allocate(fri_u_ga(np_mpi),fri_v_ga(np_mpi),fri_w_ga(np_mpi),sca_ga(np_mpi))
+  allocate(displ_u(np_mpi),displ_v(np_mpi),displ_w(np_mpi),displ_s(np_mpi))
+  fri_u_ga(:)=0;fri_v_ga(:)=0;fri_w_ga(:)=0;sca_ga(:)=0;
+  displ_u(:)=0;displ_v(:)=0;displ_w(:)=0;displ_s(:)=0;
   if(is_ibm)then
     ! we initalize the ibm coef. here
     allocate(mask_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(mask_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(mask_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(mask_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
+    allocate(mask_s(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     ! isInbody ---> false 
     ! so they start w/ all fluid
     print*, "***IBM coefficients are initializing***"
@@ -502,7 +496,7 @@ program cans
     allocate(lap_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(lap_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(lap_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
+    allocate(lap_s(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     lap_s=0._rp
     lap_u=0._rp
     lap_v=0._rp
@@ -510,21 +504,21 @@ program cans
     allocate(band_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(band_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     allocate(band_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-    allocate(pband(0:n(1)+1,0:n(2)+1,0:n(3)+1))
+    allocate(band_s(0:n(1)+1,0:n(2)+1,0:n(3)+1))
     band_u=.false.
     band_v=.false.
     band_w=.false.
-    pband=.false.
+    band_s=.false.
   endif
   !
   allocate(A_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(A_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(A_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-  allocate(A_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
+  allocate(A_s(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(B_u(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(B_v(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   allocate(B_w(0:n(1)+1,0:n(2)+1,0:n(3)+1))
-  allocate(B_s(0:n(1)+1,0:n(2)+1,0:n(3)+1,nscal))
+  allocate(B_s(0:n(1)+1,0:n(2)+1,0:n(3)+1))
   A_u=1._rp
   A_v=1._rp
   A_w=1._rp
@@ -535,7 +529,7 @@ program cans
   B_s=1._rp
   !
 #if defined(_OPENACC)
-  !$acc enter data copyin(A_u,A_v,A_w,B_u,B_v,B_w)
+  !$acc enter data copyin(A_u,A_v,A_w,A_s,B_u,B_v,B_w,B_s)
 #endif  
   
   if(is_ibm)then
@@ -547,12 +541,10 @@ program cans
     ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
     call set_ibm_staircase(lo,mask_w,0,0,1,n,l,dl,&
     ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
-    do nscalibm=1,nscal
-      call set_ibm_staircase(lo,mask_s(:,:,:,nscalibm),0,0,0,n,l,dl,&
-      ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
-    end do
+    call set_ibm_staircase(lo,mask_s,0,0,0,n,l,dl,&
+    ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf)
 #if defined (_OPENACC)
-    !$acc enter data copyin(mask_u,mask_v,mask_w)
+    !$acc enter data copyin(mask_u,mask_v,mask_w,mask_s)
 #endif
   endif
   if(is_ibm.and.ibm_2nd)then
@@ -563,32 +555,100 @@ program cans
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_v)
     call set_ibm_2nd(lo,mask_w,lap_w,0,0,1&
         ,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_w)
-    do nscalibm=1,nscal
-      call set_ibm_2nd(lo,mask_s(:,:,:,nscalibm),lap_s(:,:,:,nscalibm),0,0,0,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,&
-                              hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap)
-    end do
+    call set_ibm_2nd(lo,mask_s,lap_s,0,0,0,n,l,dl,ibm_direction,amp_l,n_wave,l_0,phase_l,&
+                            hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,zc,zf,dzc,dzf,use_hmap,band_s)
     allocate(fri_u(count(band_u(1:n(1),1:n(2),1:n(3))),12))! we do this way so we exlude ghost cells and only focus on the inner cells
-    allocate(fri_v(count(band_v(1:n(1),1:n(2),1:n(3))),12))
+    allocate(fri_v(count(band_v(1:n(1),1:n(2),1:n(3))),12))! init the local arrays
     allocate(fri_w(count(band_w(1:n(1),1:n(2),1:n(3))),12))
+    allocate(p_grad(count(band_s(1:n(1),1:n(2),1:n(3))),12))
+    allocate(dum_g(1,12))! dummy array 
+    ! now lets init the global arrays
+    size_u=size(fri_u,1);size_v=size(fri_v,1);size_w=size(fri_w,1);size_s=size(p_grad,1)
+    call MPI_GATHER(size_u,1,MPI_INT,fri_u_ga,1,MPI_INT,0,MPI_COMM_WORLD,ierr)
+    call MPI_GATHER(size_v,1,MPI_INT,fri_v_ga,1,MPI_INT,0,MPI_COMM_WORLD,ierr)
+    call MPI_GATHER(size_w,1,MPI_INT,fri_w_ga,1,MPI_INT,0,MPI_COMM_WORLD,ierr)
+    call MPI_GATHER(size_s,1,MPI_INT,sca_ga,1,MPI_INT,0,MPI_COMM_WORLD,ierr)
+    if(myid==0)then
+      allocate(fri_u_g(sum(fri_u_ga),12),fri_v_g(sum(fri_v_ga),12),fri_w_g(sum(fri_w_ga),12),p_grad_g(sum(sca_ga),12))
+      do ibm_i=2,np_mpi
+        displ_u(ibm_i)=displ_u(ibm_i-1)+fri_u_ga(ibm_i-1)
+        displ_v(ibm_i)=displ_v(ibm_i-1)+fri_v_ga(ibm_i-1)
+        displ_w(ibm_i)=displ_w(ibm_i-1)+fri_w_ga(ibm_i-1)
+        displ_s(ibm_i)=displ_s(ibm_i-1)+sca_ga(ibm_i-1)
+      end do
+    endif
+    
+
     call calc_grad_dist(fri_u,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_u,1,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
     call calc_grad_dist(fri_v,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_v,0,1,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
     call calc_grad_dist(fri_w,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_w,0,0,1,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
-    call get_pressure_band(p,pband,ibm_direction,amp_l,n_wave,l_0,phase_l,&
-        n,l,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,lo,dl,zc,zf,dzf,dzc)
-     allocate(p_grad(count(pband(1:n(1),1:n(2),1:n(3))),12))
-     p_grad(:,:)=0._rp
+    call calc_grad_dist(p_grad,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
+                                band_s,0,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc) 
+                                
      !
 #if defined (_OPENACC)
-    !$acc enter data copyin(lap_u,lap_v,lap_w)
+    !$acc enter data copyin(lap_u,lap_v,lap_w,lap_s)
+    !$acc enter data copyin(fri_u,fri_v,fri_w,p_grad)
+    !$acc enter data copyin(band_s)
 #endif
   endif
   if(ibm_2nd .and. .not.is_ibm)then
     if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"
     error stop
   endif
+!********IBM-END*************!
+  ! post-process and write initial condition
+  !
+  write(fldnum,'(i7.7)') istep
+  !$acc wait ! not needed but to prevent possible future issues
+  !$acc update self(u,v,w,p)
+  do iscal=1,nscal
+    !$acc update self(scalars(iscal)%val)
+  end do
+  ! write the inital condition
+  if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
+    include 'out1d.h90'
+    call out1d_chan(trim(datadir)//'turb_stats_'//fldnum//'.out',ng,lo,hi,3,l,dl,zc_g,u,v,w)
+    if(is_ibm.and.ibm_2nd)then
+        call calc_shear_st(fri_u,u)
+        call calc_shear_st(fri_v,v)
+        call calc_shear_st(fri_w,w)
+        call get_wall_pres(p,p_grad,lo,dl,zc,zf,mask_s,band_s)
+        if(myid==0)then
+          globu=>fri_u_g
+          globv=>fri_v_g
+          globw=>fri_w_g
+          globp=>p_grad_g
+        else
+          globu=>dum_g
+          globv=>dum_g
+          globw=>dum_g
+          globp=>dum_g
+        endif
+        !$acc update self(fri_u,fri_v,fri_w,p_grad)
+        do ibm_i=1,12
+          call MPI_GATHERV(fri_u(:,ibm_i),size_u,MPI_REAL_RP,globu(:,ibm_i),fri_u_ga,displ_u,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+          call MPI_GATHERV(fri_v(:,ibm_i),size_v,MPI_REAL_RP,globv(:,ibm_i),fri_v_ga,displ_v,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+          call MPI_GATHERV(fri_w(:,ibm_i),size_w,MPI_REAL_RP,globw(:,ibm_i),fri_w_ga,displ_w,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+          call MPI_GATHERV(p_grad(:,ibm_i),size_s,MPI_REAL_RP,globp(:,ibm_i),sca_ga,displ_s,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+        end do
+        if(myid==0)then
+          call write_data(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u_g)
+          call write_data(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v_g)
+          call write_data(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w_g)
+          call write_data(trim(datadir)//"pressure"//fldnum//".out",myid,p_grad_g)
+        endif
+      endif
+  end if
+  if(iout2d > 0.and.mod(istep,max(iout2d,1)) == 0) then
+    include 'out2d.h90'
+  end if
+  if(iout3d > 0.and.mod(istep,max(iout3d,1)) == 0) then
+    include 'out3d.h90'
+  end if
 !*****************************
   !
   ! main loop
@@ -616,7 +676,7 @@ program cans
         call apply_ibm_staircase(w,mask_w,dtrk)
         do nscalibm=1,nscal
           call apply_ibm_staircase_scalar(scalars(nscalibm)%val,&
-              mask_s(:,:,:,nscalibm),bcscal_ibm(nscalibm))
+              mask_s,bcscal_ibm(nscalibm))
         end do 
       endif
       call bounduvw(cbcvel,n,bcvel,nb,is_bound,.false.,dl,dzc,dzf,u,v,w)
@@ -627,16 +687,14 @@ program cans
         call calc_a_b(lap_v,A_v,B_v,dtrk,visc,dl)
         call calc_a_b(lap_w,A_w,B_w,dtrk,visc,dl)
         do nscalibm=1,nscal
-          call calc_a_b(lap_s(:,:,:,nscalibm),&
-          A_s(:,:,:,nscalibm),B_s(:,:,:,nscalibm),&
-          dtrk,scalars(nscalibm)%alpha,dl)
+          call calc_a_b(lap_s,A_s,B_s,dtrk,scalars(nscalibm)%alpha,dl)
         end do  
       endif
       !*******************!
       do iscal=1,nscal
         s => scalars(iscal)
         call rk_scal(rkcoeff(:,irk),n,dli,l,dzci,dzfi,grid_vol_ratio_f,s%alpha,dt,is_bound,u,v,w, &
-                     s%is_forced,s%scalf,s%source,s%fluxo,s%dsdtrko,s%val,s%f,A_s(:,:,:,iscal),B_s(:,:,:,iscal))
+                     s%is_forced,s%scalf,s%source,s%fluxo,s%dsdtrko,s%val,s%f,A_s,B_s)
         call bulk_forcing_s(n,s%is_forced,s%f,s%val)
         fs(iscal) = fs(iscal) + s%f
         if(is_impdiff) then
@@ -668,7 +726,7 @@ program cans
         call apply_ibm_staircase(w,mask_w,dtrk)
         do nscalibm=1,nscal
           call apply_ibm_staircase_scalar(scalars(nscalibm)%val,&
-              mask_s(:,:,:,nscalibm),bcscal_ibm(nscalibm))
+              mask_s,bcscal_ibm(nscalibm))
         end do 
       endif
       !*******************!
@@ -767,13 +825,42 @@ program cans
     write(fldnum,'(i7.7)') istep
     ! turb_statistics+ friction statistics
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
+      !$acc wait
+      !$acc update self(u,v,w,p)
+      do iscal=1,nscal
+        !$acc update self(scalars(iscal)%val)
+      end do
       call out1d_chan(trim(datadir)//'turb_stats_'//fldnum//'.out',ng,lo,hi,3,l,dl,zc_g,u,v,w)
-      call calc_shear_st(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u,u,band_u)
-      call calc_shear_st(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v,v,band_v)
-      call calc_shear_st(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w,w,band_w)
-      call get_wall_pres(trim(datadir)//"pressure"//fldnum//".out",myid,p,p_grad,lo,&
-                                ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                pband,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
+      if(is_ibm.and.ibm_2nd)then
+        call calc_shear_st(fri_u,u)
+        call calc_shear_st(fri_v,v)
+        call calc_shear_st(fri_w,w)
+        call get_wall_pres(p,p_grad,lo,dl,zc,zf,mask_s,band_s)
+        if(myid==0)then
+          globu=>fri_u_g
+          globv=>fri_v_g
+          globw=>fri_w_g
+          globp=>p_grad_g
+        else
+          globu=>dum_g
+          globv=>dum_g
+          globw=>dum_g
+          globp=>dum_g
+        endif
+        !$acc update self(fri_u,fri_v,fri_w,p_grad)
+        do ibm_i=1,12
+          call MPI_GATHERV(fri_u(:,ibm_i),size_u,MPI_REAL_RP,globu(:,ibm_i),fri_u_ga,displ_u,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+          call MPI_GATHERV(fri_v(:,ibm_i),size_v,MPI_REAL_RP,globv(:,ibm_i),fri_v_ga,displ_v,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+          call MPI_GATHERV(fri_w(:,ibm_i),size_w,MPI_REAL_RP,globw(:,ibm_i),fri_w_ga,displ_w,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+          call MPI_GATHERV(p_grad(:,ibm_i),size_s,MPI_REAL_RP,globp(:,ibm_i),sca_ga,displ_s,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+        end do
+        if(myid==0)then
+          call write_data(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u_g)
+          call write_data(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v_g)
+          call write_data(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w_g)
+          call write_data(trim(datadir)//"pressure"//fldnum//".out",myid,p_grad_g)
+        endif
+      endif
     endif
     !
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then

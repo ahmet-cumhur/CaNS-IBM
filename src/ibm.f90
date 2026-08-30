@@ -224,7 +224,7 @@ module mod_ibm
         integer                                     :: n_hidden,ncand
         logical                                     :: calc_inBetween
         logical                                     :: ibm_diagnostic
-        logical,dimension(0:,0:,0:),intent(inout),optional   :: band_id
+        logical,dimension(0:,0:,0:),intent(inout)   :: band_id
         calc_inBetween=.false.
         ibm_diagnostic=.false.
         if(use_hmap)then
@@ -255,24 +255,9 @@ module mod_ibm
                     ii = lo(1)+i-1
                     jj = lo(2)+j-1
                     kk = lo(3)+k-1
-                    ! we create the real location of each velocity here
-                    x = (real(ii,rp) -0.5d0+ real(dix,rp)*0.5d0)*dl(1)
-                    y = (real(jj,rp) -0.5d0+ real(diy,rp)*0.5d0)*dl(2)
-                    ! this part is due to grid stretching
-                    ! and ofc staggered grid 
-                    ! diz indicates if we are looking for w cells if we dont they are in the center
-                    ! if we look into w cells they are in the face
-                    if(diz/=1)then
-                        z = zc(k)
-                        zp = zc(k+1)
-                        zm = zc(k-1)
-                    else
-                        z = zf(k)
-                        zp = zf(k+1)
-                        zm = zf(k-1)
-                    endif
                     dzf_l=0._rp;dzc_l=0._rp
                     xp=x+dl(1);xm=x-dl(1);yp=y+dl(2);ym=y-dl(2);
+                    call get_grid_loc(lo,i,j,k,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
                     do n_dir=1,6
                         select case(n_dir)
                             case(1)
@@ -282,7 +267,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xp,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band and fluid ! these are for friction calc.
+                                            band_id(i,j,k) = .true. ! this means on band and fluid ! these are for friction calc.
                                 endif
                                 !mask_id(i,j,k) already has the velocity body information
                                 if(calc_inBetween)then 
@@ -314,7 +299,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,xm,1,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                                 if(calc_inBetween)then 
                                     if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
@@ -342,7 +327,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,yp,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                                 if(calc_inBetween)then 
                                     if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
@@ -369,7 +354,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,ym,2,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                                 if(calc_inBetween)then 
                                     if(z<hmax.and..not.mask_id(i,j,k).and..not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,&
@@ -403,7 +388,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,zp,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                             case(6)
                                 ! zm
@@ -419,7 +404,7 @@ module mod_ibm
                                             call calc_lambda(x,y,z,zm,3,lambda,ibm_direction,amp_l,n_wave,l_0,&
                                                             phase_l,n,l,dl,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf_l,dzc_l,diz)
                                             laplacian_id(i,j,k)=laplacian_id(i,j,k)+lambda
-                                            if(present(band_id))band_id(i,j,k) = .true. ! this means on band
+                                            band_id(i,j,k) = .true. ! this means on band
                                 endif
                         end select
                     end do
@@ -430,7 +415,7 @@ module mod_ibm
             c=0
             print*,"max height of the hmap: ",hmax,hmin
             print*, "possible problematic locations: ",n_hidden,ncand
-            if(present(band_id))print*, "number of band locations: ",count(band_id)
+            print*, "number of band locations: ",count(band_id)
             print*, "number of IBM locations: ",count(mask_id)
             do k=1,n(3)
                 do j=1,n(2)
@@ -713,10 +698,7 @@ module mod_ibm
                                 end do
                             endif
                         end do
-                        if(wc<=3)then
-                            ! if we have not enough points cycle
-                            cycle
-                        endif
+                        if(wc<=3)cycle
                         count=count+1
                         call get_plane(wall_loc,wall_loc_log,plane)
                         !now we have the normal and center now lets get the distance
@@ -755,27 +737,16 @@ module mod_ibm
             end do 
         end do
     end subroutine calc_grad_dist
-    subroutine calc_shear_st(fname,myid,grad_dist_id,vel_id,band_id)
+    subroutine calc_shear_st(grad_dist_id,vel_id)
         ! we assume the walls arent moving therefore we do the distance calc.
         ! time and compute the gradient here at each wanted time step
-        logical, intent(in), dimension(0:,0:,0:)                :: band_id
-        integer,intent(in)                                      :: myid
-        character(len=*), intent(in)                            :: fname
         real(rp),dimension(0:,0:,0:),intent(in)                 :: vel_id
         real(rp),dimension(:,:),intent(inout)                   :: grad_dist_id
-        integer                                                 :: i,j,k,count,kk
+        integer                                                 :: i,j,k,kk
         real(rp)                                                :: grad,dist_grad,shear_st
-        integer                                                 :: iunit
-        character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
-                                 fmt_sp = '(*(es15.8e2,1x))'
-#if !defined(_SINGLE_PRECISION)
-        character(len=*), parameter :: fmt_rp = fmt_dp
-#else
-        character(len=*), parameter :: fmt_rp = fmt_sp
-#endif
-        grad=0._rp;i=0;j=0;k=0;count=0
+        grad=0._rp;i=0;j=0;k=0;
+        !$acc parallel loop private(grad,dist_grad,shear_st,kk,i,j,k)
         do kk=lbound(grad_dist_id,1),ubound(grad_dist_id,1)
-            count=count+1
             grad=0._rp
             ! now we go through the data
             i=grad_dist_id(kk,7)
@@ -789,19 +760,9 @@ module mod_ibm
             grad_dist_id(kk,12)=shear_st
         end do 
         
-        if(myid == 0) then
-        open(newunit=iunit,file=fname)
-            do k=1,count
-                write(iunit,fmt_rp) grad_dist_id(k,1),grad_dist_id(k,2),grad_dist_id(k,3),&
-                                grad_dist_id(k,4),grad_dist_id(k,5),grad_dist_id(k,6),&
-                                grad_dist_id(k,7),grad_dist_id(k,8),grad_dist_id(k,9),&
-                                grad_dist_id(k,10),grad_dist_id(k,11),grad_dist_id(k,12)
-            end do
-        close(iunit)
-        end if
     end subroutine calc_shear_st
-
     subroutine comp_grad(d,vel,grad)
+        !$acc routine seq
         real(rp), intent(in)                      :: vel
         real(rp),intent(in)                       :: d
         real(rp),intent(out)                      :: grad
@@ -934,8 +895,8 @@ module mod_ibm
             out=epsilon(0._rp)
         endif
     end subroutine comp_sca
-
     subroutine get_grid_loc(lo,i,j,k,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
+        !$acc routine seq
         integer,intent(in)                      :: i,j,k
         real(rp),intent(out)                    :: x,y,z,xp,xm,yp,ym,zp,zm
         integer,intent(in)                      :: dix,diy,diz
@@ -966,132 +927,31 @@ module mod_ibm
     end subroutine get_grid_loc
     ! here we do the wall pressure calc stuff
 
-    subroutine get_pressure_band(p,pband,ibm_direction,amp_l,n_wave,l_0,phase_l,&
-        n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,lo,dl,zc,zf,dzf,dzc)
-        logical , intent(in), dimension(0:1,3)      :: ibm_direction
-        real(rp), intent(in), dimension(0:1,3)      :: amp_l
-        integer , intent(in), dimension(0:1,3)      :: n_wave
-        real(rp), intent(in), dimension(0:1,3)      :: l_0
-        real(rp), intent(in), dimension(0:1,3)      :: phase_l
-        integer , intent(in), dimension(3)          :: n
-        real(rp), intent(in), dimension(3)          :: l
-        real(rp),intent(in),optional                :: hmap(0:,0:)
-        real(rp),intent(in),optional                :: l1_hmap,l2_hmap 
-        integer,intent(in),optional                 :: n1_hmap,n2_hmap
-        integer,intent(in),dimension(3)             :: lo
-        real(rp),intent(in),dimension(0:)           :: zc,zf,dzc,dzf
-        real(rp), intent(in),dimension(3)           :: dl
-        logical,intent(inout),dimension(0:,0:,0:)   :: pband
-        real(rp),intent(in),dimension(0:,0:,0:)     :: p
-        real(rp)                                    :: x,y,z,xp,xm,yp,ym,zp,zm
-        real(rp)                                    :: x_nei,y_nei,z_nei,xp_nei,xm_nei,yp_nei,ym_nei,zp_nei,zm_nei
-        integer                                     :: i,j,k,s,kk                            
-        i=0;j=0;k=0;s=0;kk=0;
-        do k=(lbound(p,3)+1),(ubound(p,3)-1)
-            do j=(lbound(p,2)+1),(ubound(p,2)-1)
-                do i=(lbound(p,1)+1),(ubound(p,1)-1) ! p nprmally has ghost cells so lets just look at real locs
-                    x=0;y=0;z=0;xp=0;xm=0;yp=0;ym=0;zp=0;zm=0; 
-                    call get_grid_loc(lo,i,j,k,dl,zc,zf,0,0,0,x,y,z,xp,xm,yp,ym,zp,zm)
-                    ! pressure point that we are shouldnt be in the body 
-                    ! and next one should be inside so we can count it as an just above the surface
-                    do s=1,6
-                        select case(s)
-                            case(1)
-                                !xp
-                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
-                                           amp_l,n_wave,l_0,phase_l,xp,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                           pband(i,j,k)=.true.
-                                endif
-                            case(2)
-                                !xm
-                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
-                                           amp_l,n_wave,l_0,phase_l,xm,y,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                           pband(i,j,k)=.true.
-                                endif
-                            case(3)
-                                !yp
-                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
-                                           amp_l,n_wave,l_0,phase_l,x,yp,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                           pband(i,j,k)=.true.
-                                endif
-                            case(4)
-                                !ym
-                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
-                                           amp_l,n_wave,l_0,phase_l,x,ym,z,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                           pband(i,j,k)=.true.
-                                endif
-                            case(5)
-                                !zp
-                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
-                                           amp_l,n_wave,l_0,phase_l,x,y,zp,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                           pband(i,j,k)=.true.
-                                endif
-                            case(6)
-                                !zp
-                                if(.not.isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                                           hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap).and.isInbody(ibm_direction,&
-                                           amp_l,n_wave,l_0,phase_l,x,y,zm,n,l,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))then
-                                           pband(i,j,k)=.true.
-                                endif
-                            case default
-                                print*,"somtheting wrong at the pband locating"
-                        end select
-                    end do
-                end do 
-            end do
-        end do   
-    end subroutine get_pressure_band
-    subroutine get_wall_pres(fname,myid,p,p_grad,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                pband,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
-        integer,intent(in)                          :: myid
-        character(len=*), intent(in)                :: fname
+    subroutine get_wall_pres(p,p_grad,lo,dl,zc,zf,mask_s,band_s)
         real(rp),intent(in),dimension(0:,0:,0:)     :: p                        
         real(rp),dimension(:,:),intent(inout)       :: p_grad
-        logical , intent(in), dimension(0:1,3)      :: ibm_direction
-        real(rp), intent(in), dimension(0:1,3)      :: amp_l
-        integer , intent(in), dimension(0:1,3)      :: n_wave
-        real(rp), intent(in), dimension(0:1,3)      :: l_0
-        real(rp), intent(in), dimension(0:1,3)      :: phase_l
-        integer , intent(in), dimension(3)          :: n
-        real(rp), intent(in), dimension(3)          :: l
-        real(rp),intent(in),optional                :: hmap(0:,0:)
-        real(rp),intent(in),optional                :: l1_hmap,l2_hmap 
-        integer,intent(in),optional                 :: n1_hmap,n2_hmap
         integer,intent(in),dimension(3)             :: lo
-        real(rp),intent(in),dimension(0:)           :: zc,zf,dzc,dzf
+        real(rp),intent(in),dimension(0:)           :: zc,zf
         real(rp), intent(in),dimension(3)           :: dl
-        logical,intent(inout),dimension(0:,0:,0:)   :: pband
-
+        logical,intent(in)                          :: mask_s(0:,0:,0:)
+        logical, intent(in), dimension(0:,0:,0:)    :: band_s
         real(rp),dimension(3)                       :: c0,p_normalv
         integer                                     :: kk,dix,diy,diz 
         integer                                     :: i,j,k,m,in,jn,kn,di,dj,dk,count,gen_count,wr
-        real(rp)                                    :: angle_dum,dist,x,y,z,xp,xm,yp,ym,zp,zm
+        real(rp)                                    :: dist,x,y,z,xp,xm,yp,ym,zp,zm
         real(rp),dimension(3)                       :: vec                                    
         real(rp)                                    :: pw,b !b is the the pressure gradient
         real(rp)                                    :: s0,s1,s2,t0,t1
-        integer :: iunit
-        character(len=*), parameter :: fmt_dp = '(*(es24.16e3,1x))', &
-                                       fmt_sp = '(*(es15.8e2,1x))'
-#if !defined(_SINGLE_PRECISION)
-        character(len=*), parameter :: fmt_rp = fmt_dp
-#else
-        character(len=*), parameter :: fmt_rp = fmt_sp
-#endif
         kk=0;dix=0;diy=0;diz=0;m=0;count=0;gen_count=0;wr=0;
-        dist=0._rp;angle_dum=0._rp;vec(:)=0._rp
+        dist=0._rp;vec(:)=0._rp
         ! now we have the pressures that are on the surface but arent in the solid
         ! lets get their planes etc. we can directly call the grad distance
         ! to create a normal and a plane for each pressure band point 
         ! like we did w/ the velocities
-        call  calc_grad_dist(p_grad,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                pband,dix,diy,diz,hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap,dzf,dzc)
         ! this subroutine directly returns us an array where the pressure band locations that we located
         ! have their normal and a center point 
+        !$acc parallel loop private(kk,m,c0,p_normalv,i,j,k,s0,s1,s2,t0,t1)&
+        !$acc& private(gen_count,vec,pw,b,dist,x,y,z,xp,xm,yp,ym,zp,zm,wr)
         do kk=lbound(p_grad,1),ubound(p_grad,1)
             gen_count=gen_count+1
             c0(1)=p_grad(kk,1)
@@ -1110,15 +970,15 @@ module mod_ibm
                 dj=modulo(m/3,3)-1
                 dk=modulo(m/9,3)-1
                 in=i+di;jn=j+dj;kn=k+dk
-                ! so we check if the neighbour of the band poin is in fluid
-                if(kn==k.and.jn==j.and.in==i)cycle ! we avoid the band point
+                !so we check if the neighbour of the band poin is in fluid
+                if(kn==k.and.jn==j.and.in==i)cycle ! we avoid the band point we are on 
+                if(mask_s(in,jn,kn))cycle!mask_s is only true if the point is in body
+                if(band_s(in,jn,kn))cycle!if the location is also a band point cycle
                 call get_grid_loc(lo,in,jn,kn,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)
-                if(isInbody(ibm_direction,amp_l,n_wave,l_0,phase_l,x,y,z,n,l,&
-                hmap,l1_hmap,l2_hmap,n1_hmap,n2_hmap))cycle ! if is in body then we cycle to next
                 ! comp vec
                 count=count+1
                 vec(1)=x-c0(1);vec(2)=y-c0(2);vec(3)=z-c0(3)
-                call comp_sca(vec,p_normalv,angle_dum,dist)
+                dist=dot_product(vec,p_normalv)
                 !now we have the distance to the center
                 s0=count
                 s2=s2+dist**2
@@ -1128,23 +988,35 @@ module mod_ibm
             end do
             if(s0<3)cycle
             ! we use direct mse from the gatti's source 
-            pw=(s2*t0-s1*t1)/(s0*s2-s1**2)
-            b=(s0*t1-s1*t0)/(s0*s2-s1**2)
+            pw=(s2*t0-s1*t1)*(s0*s2-s1**2)**(-1)
+            b=(s0*t1-s1*t0)*(s0*s2-s1**2)**(-1)
             p_grad(kk,11)=pw
             p_grad(kk,12)=b
         end do 
+    end subroutine get_wall_pres
+    subroutine write_data(fname,myid,grad_id)
+        real(rp),dimension(:,:),intent(in)       :: grad_id
+        integer,intent(in)                       :: myid
+        character(len=*)                         :: fname   
+        integer                                  :: iunit,wr
+        character(len=*), parameter              :: fmt_dp = '(*(es24.16e3,1x))', &
+                                                    fmt_sp = '(*(es15.8e2,1x))'
+#if !defined(_SINGLE_PRECISION)
+        character(len=*), parameter              :: fmt_rp = fmt_dp
+#else
+        character(len=*), parameter              :: fmt_rp = fmt_sp
+#endif
         if(myid == 0) then
         open(newunit=iunit,file=fname)
-            do wr=1,gen_count
-                write(iunit,fmt_rp) p_grad(wr,1),p_grad(wr,2),p_grad(wr,3),&
-                                    p_grad(wr,4),p_grad(wr,5),p_grad(wr,6),&
-                                    p_grad(wr,7),p_grad(wr,8),p_grad(wr,9),&
-                                    p_grad(wr,10),p_grad(wr,11),p_grad(wr,12)
+            do wr=1,ubound(grad_id,1)
+                write(iunit,fmt_rp) grad_id(wr,1),grad_id(wr,2),grad_id(wr,3),&
+                                    grad_id(wr,4),grad_id(wr,5),grad_id(wr,6),&
+                                    grad_id(wr,7),grad_id(wr,8),grad_id(wr,9),&
+                                    grad_id(wr,10),grad_id(wr,11),grad_id(wr,12)
             end do
         close(iunit)
         end if
-    end subroutine get_wall_pres
-
+    end subroutine write_data
     subroutine apply_ibm_staircase(field,mask_id,dt)
         implicit none
         real(rp),intent(inout),dimension(0:,0:,0:)  :: field

@@ -183,8 +183,12 @@ module mod_rk
                                 factor12*(bforce(1) - dli(1)*( p(i+1,j,k)-p(i,j,k))))/A_u(i,j,k)
           endif                                
           if(is_buoyancy) then
-            u(i,j,k) = u(i,j,k) - factor12*gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k))
-          end if
+            if(ibm_2nd)then
+              u(i,j,k) = u(i,j,k) - factor12*gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k))/A_u(i,j,k)
+            else
+              u(i,j,k) = u(i,j,k) - factor12*gacc(1)*beta*0.5*(s(i+1,j,k)+s(i,j,k))
+            endif
+          endif
           !
           if(.not.ibm_2nd)then
           v(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k) + &
@@ -194,8 +198,12 @@ module mod_rk
                                 factor12*(bforce(2) - dli(2)*( p(i,j+1,k)-p(i,j,k))))/A_v(i,j,k)                                            
           endif
           if(is_buoyancy) then
-            v(i,j,k) = v(i,j,k) - factor12*gacc(2)*beta*0.5*(s(i,j+1,k)+s(i,j,k))
-          end if
+            if(ibm_2nd)then
+              v(i,j,k) = v(i,j,k) - factor12*gacc(2)*beta*0.5*(s(i,j+1,k)+s(i,j,k))/A_v(i,j,k)
+            else
+              v(i,j,k) = v(i,j,k) - factor12*gacc(2)*beta*0.5*(s(i,j+1,k)+s(i,j,k))
+            endif
+          endif
           !
           if(.not.ibm_2nd)then
           w(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k) + &
@@ -205,8 +213,12 @@ module mod_rk
                                 factor12*(bforce(3) - dzci(k)*(p(i,j,k+1)-p(i,j,k))))/A_w(i,j,k)
           endif
           if(is_buoyancy) then
-            w(i,j,k) = w(i,j,k) - factor12*gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k))
-          end if
+            if(ibm_2nd)then
+              w(i,j,k) = w(i,j,k) - factor12*gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k))/A_w(i,j,k)
+            else
+              w(i,j,k) = w(i,j,k) - factor12*gacc(3)*beta*0.5*(s(i,j,k+1)+s(i,j,k))
+            endif
+          endif
           !
           if(is_impdiff) then
             u(i,j,k) = u(i,j,k) + factor12*dudtrkd(i,j,k)

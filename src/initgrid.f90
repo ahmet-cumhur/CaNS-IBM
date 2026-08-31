@@ -160,7 +160,7 @@ module mod_initgrid
         real(rp),intent(in)                         :: visc,hch,hmax
         real(rp),intent(in)                         :: dzp_max_goal,dzp_min_goal
         real(rp)                                    :: re_tau,u_tau,hmax_p
-        integer                                     :: nz_fine,nz_tra,nz_coarse_it,nz_fine_tra
+        integer                                     :: nz_fine,nz_tra,nz_coarse_it,nz_fine_tra,nzh
         real(rp)                                    :: dz_fine,dzp_coarse_it
         real(rp)                                    :: gr
         real(rp)                                    :: lz_fine,lz_tra,lz_coarse_it
@@ -170,10 +170,11 @@ module mod_initgrid
         !init
         lzh=real(lz/2,kind=rp)
         gr=1.1_rp
-        i=0
+        i=0;nzh=0
         err=0.0
         dzp_coarse_it=0.0
         !lets get the basic number for fine region
+        nzh=(nz/2)
         zf(0) = 0.0
         !change if needed
         u_tau=1.0;
@@ -190,6 +191,12 @@ module mod_initgrid
         hmax_p=(hmax/hch*re_tau)
         nz_fine=ceiling(hmax_p/dzp_min_goal)
         lz_fine=real(nz_fine,kind=rp)*dzp_min_goal
+        !sanity check
+        if(nz_fine>nzh)then
+          print*,"fine region is taking all cells use different configuration"
+          print*,"current config: nzFine,nzHalf,ReTau",nz_fine,(nz/2),re_tau 
+          stop "grid creating failed..."
+        endif
         do k=1,nz_fine
             zf(k)=zf(k-1)+dz_fine
         end do
@@ -212,15 +219,22 @@ module mod_initgrid
                 nz_coarse_it=(nz/2)-(nz_fine+nz_tra)
                 dzp_coarse_it=lz_coarse_it/real(nz_coarse_it+0.5,kind=rp)!this is the half cell since the nz is odd
             endif
-
-            !print*, lz_coarse_it,nz_coarse_it,dzp_coarse_it
-            !print*, gr
-            !print*, i
+            !sanity check
+            if(nz_coarse_it<=0)then
+              print*,"this config for the grid is not healty change the inputs"
+              print*,"current config: nz_coarse_it,nzHalf,ReTau",nz_coarse_it,(nz/2),re_tau 
+              stop "grid creating failed..."
+            endif
+            
             if(i>1e6)then
                 print*, "gr couldnt be estimated please use other method or different number of cells."
-                exit
+                stop "grid creating failed..."
             endif
         end do 
+        print*,"current config: nzFine,nzTra,nzCoarse",nz_fine,nz_tra,nz_coarse_it
+        print*, lz_coarse_it,nz_coarse_it,dzp_coarse_it
+        print*, gr
+        print*, i
         !now we now number of cells that we need to apply
         nz_fine_tra=nz_fine+nz_tra
         do k=nz_fine+1,nz_fine_tra

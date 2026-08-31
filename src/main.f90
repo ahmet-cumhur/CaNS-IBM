@@ -203,7 +203,9 @@ program cans
   real(rp),allocatable,target  :: fri_u_g(:,:),fri_v_g(:,:),fri_w_g(:,:),p_grad_g(:,:)
   real(rp),allocatable,target  :: dum_g(:,:)
   real(rp),pointer      :: globu(:,:),globv(:,:),globw(:,:),globp(:,:)
-!*******HMAP********!
+!*******HMAP********!,
+  !for init grid
+  real(rp)  :: hmax_g,hch_g,hmean_g,hmin_g
 !******************!
   !
   call MPI_INIT(ierr)
@@ -308,8 +310,19 @@ program cans
   if(gtype/=5)then !5 is the rough wall IBM aware cluster two end function 
     call initgrid(gtype,ng(3),gr,l(3),dzc_g,dzf_g,zc_g,zf_g,cbcpre(0,3)//cbcpre(1,3) == 'PP')
   else
+    hmax_g=0._rp; hch_g=0._rp;hmean_g=0._rp;hmin_g=0._rp;
+    if(use_hmap)then
+      hmax_g=hmap_max_tha
+      hch_g=hch
+    else
+      hmax_g=l_0(0,3)+max(max(0._rp,amp_l(0,1)),max(0._rp,amp_l(0,2)))
+      hmin_g=l_0(0,3)-max(max(0._rp,amp_l(0,1)),max(0._rp,amp_l(0,2)))
+      hmean_g=(hmax_g+hmin_g)/2._rp
+      hch_g=(l(3)/2._rp)-hmean_g
+      if(myid==0)print*,"hmax:,hmix:,hmean:,hch",hmax_g,hmin_g,hmean_g,hch_g
+    endif
     call initgrid(gtype,ng(3),gr,l(3),dzc_g,dzf_g,zc_g,zf_g,cbcpre(0,3)//cbcpre(1,3) == 'PP',&
-                        visc,dzp_fine,dzp_coarse,hch,hmap_max_tha,myid)
+                        visc,dzp_fine,dzp_coarse,hch_g,hmax_g,myid)
   endif
   do kk=0,ng(1)+1
     xc_g(kk) = (kk-0.5_rp)*dl(1)

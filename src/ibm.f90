@@ -950,8 +950,10 @@ module mod_ibm
         ! like we did w/ the velocities
         ! this subroutine directly returns us an array where the pressure band locations that we located
         ! have their normal and a center point 
-        !$acc parallel loop private(kk,m,c0,p_normalv,i,j,k,s0,s1,s2,t0,t1)&
-        !$acc& private(gen_count,vec,pw,b,dist,x,y,z,xp,xm,yp,ym,zp,zm,wr)
+
+        !$acc parallel loop private(m,c0,p_normalv,i,j,k,s0,s1,s2,t0,t1) &
+        !$acc& private(vec,pw,b,dist,x,y,z,xp,xm,yp,ym,zp,zm) &
+        !$acc& private(di,dj,dk,in,jn,kn,count,dix,diy,diz)
         do kk=lbound(p_grad,1),ubound(p_grad,1)
             gen_count=gen_count+1
             c0(1)=p_grad(kk,1)
@@ -971,7 +973,10 @@ module mod_ibm
                 dk=modulo(m/9,3)-1
                 in=i+di;jn=j+dj;kn=k+dk
                 !so we check if the neighbour of the band poin is in fluid
-                if(kn==k.and.jn==j.and.in==i)cycle ! we avoid the band point we are on 
+                if(kn==k.and.jn==j.and.in==i)cycle ! we avoid the band point we are on
+                if(in<lbound(p,1).or.in>ubound(p,1)) cycle
+                if(jn<lbound(p,2).or.jn>ubound(p,2)) cycle
+                if(kn<lbound(p,3).or.kn>ubound(p,3)) cycle 
                 if(mask_s(in,jn,kn))cycle!mask_s is only true if the point is in body
                 if(band_s(in,jn,kn))cycle!if the location is also a band point cycle
                 call get_grid_loc(lo,in,jn,kn,dl,zc,zf,dix,diy,diz,x,y,z,xp,xm,yp,ym,zp,zm)

@@ -40,6 +40,7 @@ cbcscal(0:1,1:3,1) = 'P','P',  'P','P',  'D','D'
 bcscal(0:1,1:3,1)  =  0.,0.,   0.,0.,   0.,0.
 cbcscal_ibm(1) = "D"
 bcscal_ibm(1)  = 1.0
+const_scal = T
 ssource(1) = 0.0
 is_sforced(1) = F
 scalf(1) = 0.0

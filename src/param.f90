@@ -76,6 +76,7 @@ character(len=100), protected, allocatable, dimension(:)     :: iniscal
 character(len=1)  , protected, allocatable, dimension(:,:,:) :: cbcscal ! size (0:1,3,nscal)
 real(rp)          , protected, allocatable, dimension(:,:,:) ::  bcscal ! size (0:1,3,nscal)
 real(rp), protected, allocatable, dimension(:) :: ssource
+logical,protected :: const_scal
 logical , protected, allocatable, dimension(:) :: is_sforced
 real(rp), protected, allocatable, dimension(:) :: scalf
 logical , protected :: is_boussinesq_buoyancy = .false.
@@ -172,6 +173,7 @@ contains
                      iniscal, &
                      cbcscal,bcscal, &
                      cbcscal_ibm,bcscal_ibm,&
+                     const_scal,&
                      ssource, &
                      is_sforced, &
                      scalf, &

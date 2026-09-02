@@ -17,7 +17,7 @@ module mod_rk
                        momx_d_xy,momy_d_xy,momz_d_xy, &
                        momx_d_z ,momy_d_z ,momz_d_z, &
                        mom_xyz_ad
-  use mod_param, only: is_impdiff,is_impdiff_1d,is_boussinesq_buoyancy,is_fast_mom_kernels,ibm_2nd,is_ibm
+  use mod_param, only: is_impdiff,is_impdiff_1d,is_boussinesq_buoyancy,is_fast_mom_kernels,ibm_2nd,is_ibm,const_scal
   use mod_scal , only: scal,cmpt_scalflux,scalar
   use mod_utils, only: bulk_mean
   use mod_types
@@ -455,6 +455,7 @@ module mod_rk
     real(rp) :: mean
     real(rp),intent(in) :: A_s(0:,0:,0:)
     real(rp),intent(in) :: B_s(0:,0:,0:)
+    real(rp),parameter  :: tg=-1._rp ! temp grad ! we normalize the dT/dx = -1 for the MacDondald...
     !
     factor1 = rkpar(1)*dt
     factor2 = rkpar(2)*dt
@@ -500,7 +501,12 @@ module mod_rk
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
-          s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource)/A_s(i,j,k)
+          if(const_scal)then
+            s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource)/A_s(i,j,k)
+          else
+            s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k)&
+                        + factor12*(.5_rp*-tg*(u(i,j,k)+u(i-1,j,k))))/A_s(i,j,k)
+          endif
           if(is_impdiff) then
             s(i,j,k) = s(i,j,k) + factor12*dsdtrkd(i,j,k)
           end if
@@ -514,7 +520,12 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
-            s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource)/A_s(i,j,k)
+            if(const_scal)then
+              s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + factor12*ssource)/A_s(i,j,k)
+            else
+              s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) &
+                                              + factor12*(.5_rp*-tg*(u(i,j,k)+u(i-1,j,k))))/A_s(i,j,k)
+            endif
           end do
         end do
       end do
@@ -524,8 +535,13 @@ module mod_rk
       do k=1,n(3)
         do j=1,n(2)
           do i=1,n(1)
-            s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + &
+            if(const_scal)then
+              s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + &
                                   factor12*(ssource + dsdtrkd(i,j,k)))/A_s(i,j,k)
+            else
+              s(i,j,k) = (B_s(i,j,k)*s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + &
+                                  factor12*(.5_rp*-tg*(u(i,j,k)+u(i-1,j,k)) + dsdtrkd(i,j,k)))/A_s(i,j,k)
+            endif
           end do
         end do
       end do

@@ -30,6 +30,8 @@ module mod_ibm
         integer                                  :: i1(2),i2(2)
         real(rp)                                 :: r1(2),r2(2)
         real(rp)                                 :: w1(2),w2(2)
+        logical                                  :: macdondald
+        macdondald=.true.!to validate his case 
         xyz = [x,y,z]
         do side = 0,1
             do t = 1,3
@@ -38,10 +40,22 @@ module mod_ibm
                 if(ibm_direction(side,t))then
                     ! use wave wall  
                     if(.not. use_hmap)then
-                        height(side,t)=amp_l(side,i)*0.5_rp*(1._rp+sin(2._rp*pi*&
-                                        real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
-                                        amp_l(side,ii)*0.5_rp*(1._rp+sin(2._rp*pi*&
-                                        real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
+                        if(.not.macdondald)then
+                            height(side,t)=amp_l(side,i)*0.5_rp*(1._rp+sin(2._rp*pi*&
+                                            real(n_wave(side,i)*xyz(i)/l(i),rp)+phase_l(side,i)))+&
+                                            amp_l(side,ii)*0.5_rp*(1._rp+sin(2._rp*pi*&
+                                            real(n_wave(side,ii)*xyz(ii)/l(ii),rp)+phase_l(side,ii)))
+                        else
+                            if(side == 0)then
+                                height(side,t)=amp_l(side,i)*(1._rp + &
+                                                cos(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp))*&
+                                                cos(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)))
+                            else
+                                height(side,t)=amp_l(side,i)*(1._rp - &
+                                                cos(2._rp*pi*real(n_wave(side,i)*xyz(i)/l(i),rp))*&
+                                                cos(2._rp*pi*real(n_wave(side,ii)*xyz(ii)/l(ii),rp)))
+                            endif
+                        endif
                     ! use hmap                
                     else
                          if(trim(hmap_mode)=="fit")then

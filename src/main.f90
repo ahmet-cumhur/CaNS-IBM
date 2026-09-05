@@ -203,6 +203,10 @@ program cans
   real(rp),allocatable,target  :: fri_u_g(:,:),fri_v_g(:,:),fri_w_g(:,:),p_grad_g(:,:)
   real(rp),allocatable,target  :: dum_g(:,:)
   real(rp),pointer      :: globu(:,:),globv(:,:),globw(:,:),globp(:,:)
+  real(rp),allocatable :: mom_saveu(:,:,:)
+  real(rp),allocatable :: frifv(:,:,:,:),frifvout(:,:)
+  character (len=7)   :: mpiranknum 
+  real(rp) :: dt_fv
 !*******HMAP********!,
   !for init grid
   real(rp)  :: hmax_g,hch_g,hmean_g,hmin_g
@@ -599,14 +603,23 @@ program cans
     call calc_grad_dist(fri_w,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
                                 band_w,0,0,1,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)
     call calc_grad_dist(p_grad,lo,ibm_direction,amp_l,n_wave,l_0,phase_l,n,l,dl,zc,zf,&
-                                band_s,0,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc) 
-                                
-     !
+                                band_s,0,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)                    
+    !
+    allocate(mom_saveu,mold=u)
+    allocate(frifv(0:n(1),0:n(2),0:n(3),19))
+    call init_fric_cubes(band_u,mask_u,lo,dl,zc,zf,dzc,&
+                                        dzf,xf_g,yc_g,1,0,0,ibm_direction,amp_l,&
+                                        n_wave,l_0,phase_l,n,l,hmap_tha,lx_tha,ly_tha,&
+                                        nx_hmap_tha,ny_hmap_tha,frifv)
+    allocate(frifvout(count(frifv(1:n(1),1:n(2),1:n(3),10)>tiny(1._rp)),6))
+    !
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w,lap_s)
     !$acc enter data copyin(fri_u,fri_v,fri_w,p_grad)
-    !$acc enter data copyin(band_s)
+    !$acc enter data copyin(band_s,band_u)
+    !$acc enter data create(mom_saveu)
 #endif
+    write(mpiranknum,'(i7.7)') myid !for naming the rank based output
   endif
   if(ibm_2nd .and. .not.is_ibm)then
     if(myid == 0) print*, "ERROR: ibm_2nd requires is_ibm = T"
@@ -626,35 +639,35 @@ program cans
     include 'out1d.h90'
     call out1d_chan(trim(datadir)//'turb_stats_'//fldnum//'.out',ng,lo,hi,3,l,dl,zc_g,u,v,w)
     if(is_ibm.and.ibm_2nd)then
-        call calc_shear_st(fri_u,u)
-        call calc_shear_st(fri_v,v)
-        call calc_shear_st(fri_w,w)
-        call get_wall_pres(p,p_grad,lo,dl,zc,zf,mask_s,band_s)
-        if(myid==0)then
-          globu=>fri_u_g
-          globv=>fri_v_g
-          globw=>fri_w_g
-          globp=>p_grad_g
-        else
-          globu=>dum_g
-          globv=>dum_g
-          globw=>dum_g
-          globp=>dum_g
-        endif
-        !$acc update self(fri_u,fri_v,fri_w,p_grad)
-        do ibm_i=1,12
-          call MPI_GATHERV(fri_u(:,ibm_i),size_u,MPI_REAL_RP,globu(:,ibm_i),fri_u_ga,displ_u,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
-          call MPI_GATHERV(fri_v(:,ibm_i),size_v,MPI_REAL_RP,globv(:,ibm_i),fri_v_ga,displ_v,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
-          call MPI_GATHERV(fri_w(:,ibm_i),size_w,MPI_REAL_RP,globw(:,ibm_i),fri_w_ga,displ_w,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
-          call MPI_GATHERV(p_grad(:,ibm_i),size_s,MPI_REAL_RP,globp(:,ibm_i),sca_ga,displ_s,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
-        end do
-        if(myid==0)then
-          call write_data(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u_g)
-          call write_data(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v_g)
-          call write_data(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w_g)
-          call write_data(trim(datadir)//"pressure"//fldnum//".out",myid,p_grad_g)
-        endif
+      call calc_shear_st(fri_u,u)
+      call calc_shear_st(fri_v,v)
+      call calc_shear_st(fri_w,w)
+      call get_wall_pres(p,p_grad,lo,dl,zc,zf,mask_s,band_s)
+      if(myid==0)then
+        globu=>fri_u_g
+        globv=>fri_v_g
+        globw=>fri_w_g
+        globp=>p_grad_g
+      else
+        globu=>dum_g
+        globv=>dum_g
+        globw=>dum_g
+        globp=>dum_g
       endif
+      !$acc update self(fri_u,fri_v,fri_w,p_grad)
+      do ibm_i=1,12
+        call MPI_GATHERV(fri_u(:,ibm_i),size_u,MPI_REAL_RP,globu(:,ibm_i),fri_u_ga,displ_u,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+        call MPI_GATHERV(fri_v(:,ibm_i),size_v,MPI_REAL_RP,globv(:,ibm_i),fri_v_ga,displ_v,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+        call MPI_GATHERV(fri_w(:,ibm_i),size_w,MPI_REAL_RP,globw(:,ibm_i),fri_w_ga,displ_w,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+        call MPI_GATHERV(p_grad(:,ibm_i),size_s,MPI_REAL_RP,globp(:,ibm_i),sca_ga,displ_s,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+      end do
+      if(myid==0)then
+        call write_data(trim(datadir)//"fric-u_"//fldnum//".out",myid,fri_u_g)
+        call write_data(trim(datadir)//"fric-v_"//fldnum//".out",myid,fri_v_g)
+        call write_data(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w_g)
+        call write_data(trim(datadir)//"pressure"//fldnum//".out",myid,p_grad_g)
+      endif
+    endif
   end if
   if(iout2d > 0.and.mod(istep,max(iout2d,1)) == 0) then
     include 'out2d.h90'
@@ -840,6 +853,9 @@ program cans
     if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
       !$acc wait
       !$acc update self(u,v,w,p)
+      if(is_ibm.and.ibm_2nd)then
+        !$acc update self(mom_saveu)
+      endif
       do iscal=1,nscal
         !$acc update self(scalars(iscal)%val)
       end do
@@ -873,6 +889,17 @@ program cans
           call write_data(trim(datadir)//"fric-w_"//fldnum//".out",myid,fri_w_g)
           call write_data(trim(datadir)//"pressure"//fldnum//".out",myid,p_grad_g)
         endif
+        !FV method for calculating the wall friction 
+        call calc_fric_cubes(lo,u,v,w,p,dli(1),dli(2),dzci,visc,band_u,mom_saveu,bforce(1),dt_fv,frifv,frifvout)!u
+        call writeFVfric(trim(datadir)//'FV-fric'//trim(mpiranknum)//'u'//fldnum//'.out',frifvout)
+        !this is for the fricition calculation w/ FVM
+      endif
+    endif
+    if(is_ibm.and.ibm_2nd)then
+      if(iout1d > 0.and.mod(istep+1,max(iout1d,1)) == 0) then
+        ! we need the old momentum
+        call save_mom(u,band_u,mom_saveu)
+        dt_fv=dti
       endif
     endif
     !

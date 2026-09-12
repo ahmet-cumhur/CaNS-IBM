@@ -203,7 +203,7 @@ program cans
   real(rp),allocatable,target  :: fri_u_g(:,:),fri_v_g(:,:),fri_w_g(:,:),p_grad_g(:,:)
   real(rp),allocatable,target  :: dum_g(:,:)
   real(rp),pointer      :: globu(:,:),globv(:,:),globw(:,:),globp(:,:)
-  real(rp),allocatable :: mom_saveu(:,:,:)
+  real(rp),allocatable :: mom_saveu(:,:,:),mom_savev(:,:,:),mom_savew(:,:,:)
   real(rp),allocatable :: frifv(:,:,:,:),frifvout(:,:)
   character (len=7)   :: mpiranknum 
   real(rp) :: dt_fv
@@ -606,18 +606,20 @@ program cans
                                 band_s,0,0,0,hmap_tha,lx_tha,ly_tha,nx_hmap_tha,ny_hmap_tha,dzf,dzc)                    
     !
     allocate(mom_saveu,mold=u)
+    allocate(mom_savev,mold=v)
+    allocate(mom_savew,mold=w)
     allocate(frifv(0:n(1),0:n(2),0:n(3),19))
-    call init_fric_cubes(band_u,mask_u,lo,dl,zc,zf,dzc,&
-                                        dzf,xf_g,yc_g,1,0,0,ibm_direction,amp_l,&
+    call init_fric_cubes(band_s,mask_s,lo,dl,zc,zf,dzc,&
+                                        dzf,xf_g,yc_g,0,0,0,ibm_direction,amp_l,&
                                         n_wave,l_0,phase_l,n,l,hmap_tha,lx_tha,ly_tha,&
                                         nx_hmap_tha,ny_hmap_tha,frifv)
-    allocate(frifvout(count(frifv(1:n(1),1:n(2),1:n(3),10)>tiny(1._rp)),6))
+    allocate(frifvout(count(frifv(1:n(1),1:n(2),1:n(3),10)>tiny(1._rp)),26))
     !
 #if defined (_OPENACC)
     !$acc enter data copyin(lap_u,lap_v,lap_w,lap_s)
     !$acc enter data copyin(fri_u,fri_v,fri_w,p_grad)
     !$acc enter data copyin(band_s,band_u)
-    !$acc enter data create(mom_saveu)
+    !$acc enter data create(mom_saveu,mom_savev,mom_savew)
 #endif
     write(mpiranknum,'(i7.7)') myid !for naming the rank based output
   endif
@@ -854,7 +856,7 @@ program cans
       !$acc wait
       !$acc update self(u,v,w,p)
       if(is_ibm.and.ibm_2nd)then
-        !$acc update self(mom_saveu)
+        !$acc update self(mom_saveu,mom_savev,mom_savew)
       endif
       do iscal=1,nscal
         !$acc update self(scalars(iscal)%val)
@@ -890,8 +892,10 @@ program cans
           call write_data(trim(datadir)//"pressure"//fldnum//".out",myid,p_grad_g)
         endif
         !FV method for calculating the wall friction 
-        call calc_fric_cubes(lo,u,v,w,p,dli(1),dli(2),dzci,visc,band_u,mom_saveu,bforce(1),dt_fv,frifv,frifvout)!u
-        call writeFVfric(trim(datadir)//'FV-fric'//trim(mpiranknum)//'u'//fldnum//'.out',frifvout)
+        call calc_fric_cubes(lo,u,v,w,p,dli(1),dli(2),dzci,zf,zc,&
+                            visc,band_s,mom_saveu,mom_savev,mom_savew,&
+                            bforce(1),bforce(2),bforce(3),dt_fv,frifv,frifvout)!s
+        call writeFVfric(trim(datadir)//'FV-fric_'//trim(mpiranknum)//'_s_'//fldnum//'.out',frifvout)
         !this is for the fricition calculation w/ FVM
       endif
     endif
@@ -899,6 +903,8 @@ program cans
       if(iout1d > 0.and.mod(istep+1,max(iout1d,1)) == 0) then
         ! we need the old momentum
         call save_mom(u,band_u,mom_saveu)
+        call save_mom(v,band_v,mom_savev)
+        call save_mom(w,band_w,mom_savew)
         dt_fv=dti
       endif
     endif
